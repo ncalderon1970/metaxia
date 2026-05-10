@@ -249,9 +249,11 @@ try {
     $casos = [];
 }
 
+$mostrarAlertaTopbar = metis_topbar_action_visible($pdo, 'alertas', false);
+
 $pageHeaderActions = metis_context_actions([
     metis_context_action('Denuncias', APP_URL . '/modules/denuncias/index.php', 'bi-folder2-open', 'primary'),
-    metis_context_action('Alertas', APP_URL . '/modules/alertas/index.php', 'bi-bell-fill', 'warning'),
+    metis_context_action('Alertas', APP_URL . '/modules/alertas/index.php', 'bi-bell-fill', 'warning', $mostrarAlertaTopbar),
     metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
     metis_context_action('Reportes', APP_URL . '/modules/reportes/index.php', 'bi-bar-chart', 'secondary'),
 ]);

@@ -72,3 +72,31 @@ if (!function_exists('metis_context_actions')) {
         return $out;
     }
 }
+
+if (!function_exists('metis_context_config_flag')) {
+    function metis_context_config_flag(PDO $pdo, string $configKey, string $itemKey, bool $default = false): bool
+    {
+        try {
+            $stmt = $pdo->prepare("SELECT valor FROM sistema_config WHERE clave = ? LIMIT 1");
+            $stmt->execute([$configKey]);
+            $raw = $stmt->fetchColumn();
+            $cfg = $raw ? (json_decode((string)$raw, true) ?: []) : [];
+
+            if (!array_key_exists($itemKey, $cfg)) {
+                return $default;
+            }
+
+            return (int)($cfg[$itemKey]['visible'] ?? 0) === 1;
+        } catch (Throwable $e) {
+            return $default;
+        }
+    }
+}
+
+if (!function_exists('metis_topbar_action_visible')) {
+    function metis_topbar_action_visible(PDO $pdo, string $key, bool $default = false): bool
+    {
+        return metis_context_config_flag($pdo, 'acciones_expediente_topbar', $key, $default);
+    }
+}
+

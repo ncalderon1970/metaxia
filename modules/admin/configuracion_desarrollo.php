@@ -333,7 +333,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
     <div class="dev-card" style="margin-top:1rem;">
         <div class="dev-section-title">
             <i class="bi bi-window-sidebar"></i>
-            Acciones — Barra superior del expediente
+            Acciones — Barra superior contextual
             <span style="font-weight:400;color:#94a3b8;font-size:.7rem;margin-left:.25rem;">
                 core/layout_header.php
             </span>
@@ -348,7 +348,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                         Botón Alertas
                     </div>
                     <div class="dev-tab-desc">
-                        Controla si el botón Alertas aparece en la barra superior del expediente. Por defecto queda oculto para evitar duplicidad visual.
+                        Controla si el botón Alertas aparece en la barra superior contextual del expediente y de los módulos operativos. Por defecto queda oculto para evitar duplicidad visual.
                     </div>
                 </div>
                 <div class="dev-toggle-wrap">

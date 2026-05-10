@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -14,6 +15,13 @@ $colegioId = (int)($user['colegio_id'] ?? 0);
 
 $pageTitle = 'Denuncias · Metis';
 $pageSubtitle = 'Registro, búsqueda y control de expedientes de convivencia escolar';
+
+$mostrarAlertaTopbar = metis_topbar_action_visible($pdo, 'alertas', false);
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Nueva denuncia', APP_URL . '/modules/denuncias/crear.php', 'bi-plus-circle', 'success'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+    metis_context_action('Alertas', APP_URL . '/modules/alertas/index.php', 'bi-bell', 'warning', $mostrarAlertaTopbar),
+]);
 
 function den_fecha(?string $value): string
 {
@@ -548,22 +556,6 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         evidencias, declaraciones, alertas y seguimiento institucional.
     </p>
 
-    <div class="den-actions">
-        <a class="den-btn primary" href="<?= APP_URL ?>/modules/denuncias/crear.php">
-            <i class="bi bi-plus-circle"></i>
-            Nueva denuncia
-        </a>
-
-        <a class="den-btn" href="<?= APP_URL ?>/modules/dashboard/index.php">
-            <i class="bi bi-speedometer2"></i>
-            Dashboard
-        </a>
-
-        <a class="den-btn" href="<?= APP_URL ?>/modules/alertas/index.php">
-            <i class="bi bi-bell"></i>
-            Alertas
-        </a>
-    </div>
 </section>
 
 <?php if ($error !== ''): ?>
