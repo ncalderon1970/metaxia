@@ -17,6 +17,8 @@ $currentUser = Auth::user() ?? [];
 
 $pageTitle = $pageTitle ?? 'Metis';
 $pageSubtitle = $pageSubtitle ?? 'Sistema de Gestión de Convivencia Escolar';
+$pageHeaderActions = (isset($pageHeaderActions) && is_array($pageHeaderActions)) ? $pageHeaderActions : [];
+$layoutHasPageHeaderActions = !empty($pageHeaderActions);
 
 $usuarioNombre = (string)($currentUser['nombre'] ?? 'Usuario');
 $usuarioEmail = (string)($currentUser['email'] ?? '');
@@ -655,7 +657,7 @@ $menuAdmin = [
         }
 
         .metis-topbar {
-            height: 74px;
+            min-height: 74px;
             background: rgba(255,255,255,.86);
             backdrop-filter: blur(12px);
             border-bottom: 1px solid var(--metis-border);
@@ -667,6 +669,100 @@ $menuAdmin = [
             position: sticky;
             top: 0;
             z-index: 30;
+        }
+
+        .metis-topbar.has-page-actions {
+            height: auto;
+            align-items: stretch;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0;
+            padding-top: .78rem;
+            padding-bottom: .72rem;
+        }
+
+        .metis-topbar-main {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            min-width: 0;
+        }
+
+        .metis-topbar-actions-strip {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: .48rem;
+            flex-wrap: wrap;
+            margin-top: .62rem;
+            padding-top: .62rem;
+            border-top: 1px solid rgba(226,232,240,.78);
+        }
+
+        .metis-page-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .42rem;
+            min-height: 34px;
+            padding: .44rem .76rem;
+            border-radius: 9px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: .78rem;
+            font-weight: 900;
+            line-height: 1;
+            text-decoration: none;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(15,23,42,.055);
+            transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+        }
+
+        .metis-page-action-btn:hover {
+            transform: translateY(-1px);
+            color: #0f172a;
+            background: #f8fafc;
+            border-color: #94a3b8;
+            box-shadow: 0 8px 18px rgba(15,23,42,.10);
+        }
+
+        .metis-page-action-btn.primary {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+            color: #1d4ed8;
+        }
+
+        .metis-page-action-btn.success {
+            background: #ecfdf5;
+            border-color: #bbf7d0;
+            color: #047857;
+        }
+
+        .metis-page-action-btn.warning {
+            background: #fffbeb;
+            border-color: #fde68a;
+            color: #92400e;
+        }
+
+        .metis-page-action-btn.danger {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+
+        .metis-page-action-btn.dark {
+            background: #0f172a;
+            border-color: #0f172a;
+            color: #ffffff;
+        }
+
+        .metis-page-action-btn.dark:hover {
+            color: #ffffff;
+            background: #1e293b;
+            border-color: #1e293b;
         }
 
         .metis-page-heading {
@@ -832,6 +928,25 @@ $menuAdmin = [
 
             .metis-topbar {
                 padding: 0 1rem;
+            }
+
+            .metis-topbar.has-page-actions {
+                padding-top: .72rem;
+                padding-bottom: .68rem;
+            }
+
+            .metis-topbar-main {
+                gap: .75rem;
+            }
+
+            .metis-topbar-actions-strip {
+                gap: .4rem;
+            }
+
+            .metis-page-action-btn {
+                min-height: 32px;
+                padding: .4rem .62rem;
+                font-size: .74rem;
             }
 
             .metis-chip {
@@ -1009,35 +1124,65 @@ $menuAdmin = [
     </aside>
 
     <main class="metis-main">
-        <header class="metis-topbar">
-            <div style="display:flex;align-items:center;gap:.8rem;min-width:0;">
-                <button class="metis-menu-toggle" type="button" data-metis-toggle aria-label="Abrir menú">
-                    <i class="bi bi-list"></i>
-                </button>
+        <header class="metis-topbar<?= $layoutHasPageHeaderActions ? ' has-page-actions' : '' ?>">
+            <div class="metis-topbar-main">
+                <div style="display:flex;align-items:center;gap:.8rem;min-width:0;">
+                    <button class="metis-menu-toggle" type="button" data-metis-toggle aria-label="Abrir menú">
+                        <i class="bi bi-list"></i>
+                    </button>
 
-                <div class="metis-page-heading">
-                    <h1 class="metis-page-title"><?= e($pageTitle) ?></h1>
-                    <div class="metis-page-subtitle"><?= e($pageSubtitle) ?></div>
-                </div>
-            </div>
-
-            <div class="metis-top-actions">
-                <!-- Buscador global -->
-                <div class="metis-search-wrap" id="metisSearchWrap">
-                    <div class="metis-search-box">
-                        <i class="bi bi-search metis-search-icon"></i>
-                        <input type="text" id="metisSearchInput" class="metis-search-input"
-                               placeholder="Buscar caso, alumno, RUN…" autocomplete="off">
-                        <kbd class="metis-search-kbd">ESC</kbd>
+                    <div class="metis-page-heading">
+                        <h1 class="metis-page-title"><?= e($pageTitle) ?></h1>
+                        <div class="metis-page-subtitle"><?= e($pageSubtitle) ?></div>
                     </div>
-                    <div class="metis-search-results" id="metisSearchResults" style="display:none;"></div>
                 </div>
 
-                <span class="metis-chip">
-                    <i class="bi bi-shield-check"></i>
-                    <?= e($rolNombre) ?>
-                </span>
+                <div class="metis-top-actions">
+                    <!-- Buscador global -->
+                    <div class="metis-search-wrap" id="metisSearchWrap">
+                        <div class="metis-search-box">
+                            <i class="bi bi-search metis-search-icon"></i>
+                            <input type="text" id="metisSearchInput" class="metis-search-input"
+                                   placeholder="Buscar caso, alumno, RUN…" autocomplete="off">
+                            <kbd class="metis-search-kbd">ESC</kbd>
+                        </div>
+                        <div class="metis-search-results" id="metisSearchResults" style="display:none;"></div>
+                    </div>
+
+                    <span class="metis-chip">
+                        <i class="bi bi-shield-check"></i>
+                        <?= e($rolNombre) ?>
+                    </span>
+                </div>
             </div>
+
+            <?php if ($layoutHasPageHeaderActions): ?>
+                <nav class="metis-topbar-actions-strip" aria-label="Acciones de la página">
+                    <?php foreach ($pageHeaderActions as $action): ?>
+                        <?php
+                            if (isset($action['visible']) && !$action['visible']) {
+                                continue;
+                            }
+
+                            $actionUrl = (string)($action['url'] ?? '#');
+                            $actionLabel = (string)($action['label'] ?? 'Acción');
+                            $actionIcon = (string)($action['icon'] ?? 'bi-dot');
+                            $actionVariant = trim((string)($action['variant'] ?? ''));
+                            $actionTarget = (string)($action['target'] ?? '');
+                            $actionRel = (string)($action['rel'] ?? '');
+                        ?>
+                        <a
+                            class="metis-page-action-btn<?= $actionVariant !== '' ? ' ' . e($actionVariant) : '' ?>"
+                            href="<?= e($actionUrl) ?>"
+                            <?= $actionTarget !== '' ? 'target="' . e($actionTarget) . '"' : '' ?>
+                            <?= $actionRel !== '' ? 'rel="' . e($actionRel) . '"' : '' ?>
+                        >
+                            <i class="bi <?= e($actionIcon) ?>"></i>
+                            <?= e($actionLabel) ?>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
         </header>
 
         <script>

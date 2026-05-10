@@ -379,8 +379,53 @@ $contadores = $stmtContadores->fetch() ?: [
     'gestiones' => 0,
 ];
 
-$pageTitle = 'Seguimiento · ' . ($caso['numero_caso'] ?? 'Caso');
-$pageSubtitle = 'Gestión operativa del expediente de convivencia escolar';
+$pageTitle = 'Expediente · ' . ($caso['numero_caso'] ?? 'Caso');
+$pageSubtitle = 'Revisión integral del caso, intervinientes, declaraciones, evidencias e historial';
+
+$pageHeaderActions = [
+    [
+        'label' => 'Volver al listado',
+        'icon' => 'bi-arrow-left',
+        'url' => APP_URL . '/modules/seguimiento/index.php',
+        'variant' => 'dark',
+    ],
+    [
+        'label' => 'Intervinientes',
+        'icon' => 'bi-people',
+        'url' => APP_URL . '/modules/denuncias/ver.php?id=' . $casoId . '&tab=participantes',
+        'variant' => 'success',
+    ],
+    [
+        'label' => 'Seguimiento',
+        'icon' => 'bi-clipboard2-check',
+        'url' => APP_URL . '/modules/seguimiento/abrir.php?caso_id=' . $casoId,
+        'variant' => 'primary',
+    ],
+    [
+        'label' => 'Cierre formal',
+        'icon' => 'bi-check2-square',
+        'url' => APP_URL . '/modules/denuncias/ver.php?id=' . $casoId . '&tab=cierre',
+    ],
+    [
+        'label' => 'Aula Segura',
+        'icon' => 'bi-exclamation-triangle',
+        'url' => APP_URL . '/modules/denuncias/ver.php?id=' . $casoId . '&tab=aula_segura',
+        'variant' => 'warning',
+    ],
+    [
+        'label' => 'Reporte ejecutivo',
+        'icon' => 'bi-printer',
+        'url' => APP_URL . '/modules/denuncias/reporte_ejecutivo.php?id=' . $casoId,
+        'target' => '_blank',
+        'rel' => 'noopener',
+    ],
+    [
+        'label' => 'Alertas',
+        'icon' => 'bi-bell',
+        'url' => APP_URL . '/modules/alertas/index.php',
+        'variant' => 'danger',
+    ],
+];
 
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
@@ -679,23 +724,6 @@ textarea.seg-control {
         Seguimiento operativo del caso ·
         <?= e($caso['estado_formal'] ?: seg_abrir_label($caso['estado'])) ?>
     </p>
-
-    <div class="seg-open-actions">
-        <a class="seg-open-btn" href="<?= APP_URL ?>/modules/seguimiento/index.php">
-            <i class="bi bi-arrow-left"></i>
-            Volver a seguimiento
-        </a>
-
-        <a class="seg-open-btn" href="<?= APP_URL ?>/modules/denuncias/ver.php?id=<?= (int)$casoId ?>">
-            <i class="bi bi-folder2-open"></i>
-            Ver expediente
-        </a>
-
-        <a class="seg-open-btn" href="<?= APP_URL ?>/modules/alertas/index.php">
-            <i class="bi bi-bell"></i>
-            Alertas
-        </a>
-    </div>
 </section>
 
 <?php if ($exito !== ''): ?>
