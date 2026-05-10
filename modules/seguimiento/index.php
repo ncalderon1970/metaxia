@@ -203,7 +203,6 @@ try {
                 SELECT COUNT(*)
                 FROM caso_participantes cp
                 WHERE cp.caso_id = c.id
-                  AND cp.colegio_id = c.colegio_id
             ) AS participantes,
             CASE
                 WHEN (

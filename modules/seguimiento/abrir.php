@@ -358,7 +358,13 @@ $alertas = $stmtAlertas->fetchAll();
 
 $stmtContadores = $pdo->prepare("
     SELECT
-        (SELECT COUNT(*) FROM caso_participantes WHERE caso_id = ? AND colegio_id = ?) AS participantes,
+        (
+            SELECT COUNT(*)
+            FROM caso_participantes cp
+            INNER JOIN casos c2 ON c2.id = cp.caso_id
+            WHERE cp.caso_id = ?
+              AND c2.colegio_id = ?
+        ) AS participantes,
         (SELECT COUNT(*) FROM caso_declaraciones WHERE caso_id = ?) AS declaraciones,
         (SELECT COUNT(*) FROM caso_evidencias WHERE caso_id = ? AND colegio_id = ?) AS evidencias,
         (SELECT COUNT(*) FROM caso_alertas WHERE caso_id = ? AND estado = 'pendiente') AS alertas_pendientes,
