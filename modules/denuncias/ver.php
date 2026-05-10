@@ -198,6 +198,29 @@ if (!in_array($tab, $tabsPermitidos, true)) {
     $tab = 'resumen';
 }
 
+
+if (!function_exists('metis_exp_topbar_action_visible')) {
+    function metis_exp_topbar_action_visible(PDO $pdo, string $key, bool $default = false): bool
+    {
+        try {
+            $stmt = $pdo->prepare("SELECT valor FROM sistema_config WHERE clave = 'acciones_expediente_topbar' LIMIT 1");
+            $stmt->execute();
+            $raw = $stmt->fetchColumn();
+            $cfg = $raw ? (json_decode((string)$raw, true) ?: []) : [];
+
+            if (!array_key_exists($key, $cfg)) {
+                return $default;
+            }
+
+            return (int)($cfg[$key]['visible'] ?? 0) === 1;
+        } catch (Throwable $e) {
+            return $default;
+        }
+    }
+}
+
+$mostrarAlertaTopbarExpediente = metis_exp_topbar_action_visible($pdo, 'alertas', false);
+
 $pageTitle = 'Expediente · ' . ($caso['numero_caso'] ?? 'Caso');
 $pageSubtitle = 'Revisión integral del caso, intervinientes, declaraciones, evidencias e historial';
 
@@ -207,30 +230,6 @@ $pageHeaderActions = [
         'icon' => 'bi-arrow-left',
         'url' => APP_URL . '/modules/denuncias/index.php',
         'variant' => 'dark',
-    ],
-    [
-        'label' => 'Intervinientes',
-        'icon' => 'bi-people',
-        'url' => APP_URL . '/modules/denuncias/ver.php?id=' . $casoId . '&tab=participantes',
-        'variant' => 'success',
-    ],
-    [
-        'label' => 'Seguimiento',
-        'icon' => 'bi-clipboard2-check',
-        'url' => APP_URL . '/modules/seguimiento/abrir.php?caso_id=' . $casoId,
-        'variant' => 'primary',
-    ],
-    [
-        'label' => 'Cierre formal',
-        'icon' => 'bi-check2-square',
-        'url' => APP_URL . '/modules/denuncias/ver.php?id=' . $casoId . '&tab=cierre',
-        'variant' => !empty($cierreCaso) ? 'success' : '',
-    ],
-    [
-        'label' => 'Aula Segura',
-        'icon' => 'bi-exclamation-triangle',
-        'url' => APP_URL . '/modules/denuncias/ver.php?id=' . $casoId . '&tab=aula_segura',
-        'variant' => 'warning',
     ],
     [
         'label' => 'Reporte ejecutivo',
@@ -244,6 +243,7 @@ $pageHeaderActions = [
         'icon' => 'bi-bell',
         'url' => APP_URL . '/modules/alertas/index.php',
         'variant' => 'danger',
+        'visible' => $mostrarAlertaTopbarExpediente,
     ],
 ];
 

@@ -45,18 +45,19 @@ function sc_set(PDO $pdo, string $clave, array $valor, int $userId): void
 
 // Definición de todos los tabs disponibles (orden y labels)
 $tabsDenuncia = [
-    'resumen'             => ['label' => 'Resumen',              'core' => true,  'desc' => 'Vista general del caso. Siempre recomendado.'],
-    'seguimiento'         => ['label' => 'Seguimiento / IA',     'core' => true,  'desc' => 'Análisis IA, medidas y seguimiento. Core del sistema.'],
-    'plan_accion'         => ['label' => 'Plan de Acción',        'core' => false, 'desc' => 'Plan de acción versionado por participante con trazabilidad completa.'],
-    'clasificacion'       => ['label' => 'Clasificación',        'core' => false, 'desc' => 'Registro normativo MINEDUC, indicadores y marcadores Ley 21.809 / REX 782.'],
-    'participantes'       => ['label' => 'Participantes',        'core' => false, 'desc' => 'Listado de intervinientes del caso.'],
-    // medidas_preventivas forma parte del tab Seguimiento — no tiene tab propio
-    'declaraciones'       => ['label' => 'Declaraciones y evidencias', 'core' => false, 'desc' => 'Declaraciones de participantes y evidencias adjuntas (integradas en un solo tab).'],
-    // 'evidencias' integrada en tab Declaraciones
-    'gestion'             => ['label' => 'Gestión ejecutiva',    'core' => false, 'desc' => 'Acciones y compromisos directivos. En desarrollo.'],
-    'aula_segura'         => ['label' => 'Aula Segura',          'core' => false, 'desc' => 'Procedimiento Aula Segura. Se muestra solo si aplica.'],
-    'historial'           => ['label' => 'Historial',            'core' => false, 'desc' => 'Log de cambios del caso.'],
-    'cierre'              => ['label' => 'Cierre',               'core' => false, 'desc' => 'Registro de cierre formal del caso.'],
+    'resumen'       => ['label' => 'Resumen ejecutivo', 'core' => true,  'desc' => 'Vista general del expediente. Siempre visible.'],
+    'participantes' => ['label' => 'Intervinientes',     'core' => false, 'desc' => 'Intervinientes del caso, calidad procesal y reclasificación.'],
+    'declaraciones' => ['label' => 'Declaraciones',      'core' => false, 'desc' => 'Declaraciones de intervinientes y antecedentes asociados.'],
+    'evidencias'    => ['label' => 'Evidencias',         'core' => false, 'desc' => 'Archivos y evidencias documentales del expediente.'],
+    'clasificacion' => ['label' => 'Clasificación',      'core' => false, 'desc' => 'Registro normativo y clasificación del caso.'],
+    'pauta_riesgo'  => ['label' => 'Pauta de riesgo',    'core' => false, 'desc' => 'Evaluación de riesgo y derivaciones.'],
+    'aula_segura'   => ['label' => 'Aula Segura',        'core' => false, 'desc' => 'Procedimiento Aula Segura cuando corresponda.'],
+    'analisis_ia'   => ['label' => 'Análisis IA',        'core' => false, 'desc' => 'Análisis asistido por IA cuando el módulo esté disponible.'],
+    'seguimiento'   => ['label' => 'Seguimiento',        'core' => true,  'desc' => 'Gestión de medidas, avances y seguimiento. Siempre visible.'],
+    'plan_accion'   => ['label' => 'Plan de Acción',     'core' => false, 'desc' => 'Plan de acción por participante con trazabilidad.'],
+    'gestion'       => ['label' => 'Gestión ejecutiva',  'core' => false, 'desc' => 'Acciones y compromisos directivos.'],
+    'cierre'        => ['label' => 'Cierre',             'core' => false, 'desc' => 'Cierre formal y reapertura del caso.'],
+    'historial'     => ['label' => 'Historial',          'core' => false, 'desc' => 'Trazabilidad histórica del expediente.'],
 ];
 
 // ── POST: guardar cambios ─────────────────────────────────
@@ -94,8 +95,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
 
     try {
+        $accionesTopbarNew = [
+            'alertas' => [
+                'visible' => isset($_POST['topbar_alertas']) ? 1 : 0,
+                'label'   => 'Alertas',
+            ],
+        ];
+
         sc_set($pdo, 'tabs_ver_denuncia', $configNew, $userId);
         sc_set($pdo, 'modulos_sidebar', $sidebarNew, $userId);
+        sc_set($pdo, 'acciones_expediente_topbar', $accionesTopbarNew, $userId);
         $msgOk = 'Configuración guardada. Los cambios aplican de inmediato.';
     } catch (Throwable $e) {
         $msgErr = 'Error al guardar: ' . $e->getMessage();
@@ -120,6 +129,11 @@ if (!isset($sidebarActual['alertas'])) {
 }
 if (!isset($sidebarActual['evidencias'])) {
     $sidebarActual['evidencias'] = ['visible' => 1, 'label' => 'Evidencias'];
+}
+
+$accionesTopbarActual = sc_get($pdo, 'acciones_expediente_topbar', []);
+if (!isset($accionesTopbarActual['alertas'])) {
+    $accionesTopbarActual['alertas'] = ['visible' => 0, 'label' => 'Alertas'];
 }
 
 $pageTitle = 'Configuración de desarrollo · Metis';
@@ -299,6 +313,50 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                 </div>
             </div>
             <?php endforeach; ?>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:1.25rem;">
+            <button type="submit" class="dev-save-btn">
+                <i class="bi bi-check-circle-fill"></i> Guardar configuración
+            </button>
+        </div>
+    </div>
+
+    <!-- ACCIONES DE LA BARRA SUPERIOR DEL EXPEDIENTE -->
+    <div class="dev-card" style="margin-top:1rem;">
+        <div class="dev-section-title">
+            <i class="bi bi-window-sidebar"></i>
+            Acciones — Barra superior del expediente
+            <span style="font-weight:400;color:#94a3b8;font-size:.7rem;margin-left:.25rem;">
+                core/layout_header.php
+            </span>
+        </div>
+
+        <div class="dev-tab-list">
+            <?php $alertasTopbarVisible = (int)($accionesTopbarActual['alertas']['visible'] ?? 0); ?>
+            <div class="dev-tab-row">
+                <div class="dev-tab-info">
+                    <div class="dev-tab-label">
+                        <i class="bi bi-bell" style="color:#dc2626;"></i>
+                        Botón Alertas
+                    </div>
+                    <div class="dev-tab-desc">
+                        Controla si el botón Alertas aparece en la barra superior del expediente. Por defecto queda oculto para evitar duplicidad visual.
+                    </div>
+                </div>
+                <div class="dev-toggle-wrap">
+                    <span style="color:<?= $alertasTopbarVisible ? '#059669' : '#94a3b8' ?>;">
+                        <?= $alertasTopbarVisible ? 'Visible' : 'Oculto' ?>
+                    </span>
+                    <label class="dev-toggle">
+                        <input type="checkbox"
+                               name="topbar_alertas"
+                               value="1"
+                               <?= $alertasTopbarVisible ? 'checked' : '' ?>>
+                        <span class="dev-slider"></span>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <div style="display:flex;justify-content:flex-end;margin-top:1.25rem;">

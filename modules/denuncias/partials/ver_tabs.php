@@ -129,12 +129,6 @@ $totalDeclaraciones = count($declaraciones ?? []);
 $totalEvidencias = count($evidencias ?? []);
 $totalParticipantes = count($participantes ?? []);
 $totalGestion = count($gestionEjecutiva ?? []);
-$casoNumero = (string)($caso['numero_caso'] ?? ('Caso #' . $casoId));
-$estadoNombre = (string)($caso['estado_nombre'] ?? $caso['estado_caso_nombre'] ?? $caso['estado'] ?? 'Sin estado');
-$prioridad = (string)($caso['prioridad'] ?? 'media');
-$fechaIngreso = (string)($caso['fecha_ingreso'] ?? '');
-$fechaIngresoCorta = $fechaIngreso !== '' ? date('d-m-Y', strtotime($fechaIngreso)) : 'S/I';
-
 $navGroups = [];
 
 $navGroups[] = [
@@ -266,16 +260,6 @@ foreach ($navGroups as $group) {
 
 <div class="exp-workspace">
     <aside class="exp-case-nav" aria-label="Navegación contextual del expediente">
-        <div class="exp-case-nav-summary">
-            <div class="exp-case-nav-kicker">Expediente activo</div>
-            <div class="exp-case-nav-number"><?= e($casoNumero) ?></div>
-            <div class="exp-case-nav-meta">
-                <span><i class="bi bi-circle-fill"></i> <?= e($estadoNombre) ?></span>
-                <span><i class="bi bi-flag-fill"></i> Prioridad <?= e(ucfirst($prioridad)) ?></span>
-                <span><i class="bi bi-calendar-event"></i> <?= e($fechaIngresoCorta) ?></span>
-            </div>
-        </div>
-
         <div class="exp-case-nav-current">
             <span>Vista actual</span>
             <strong><?= e($activeLabel) ?></strong>
