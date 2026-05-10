@@ -1,4 +1,8 @@
-<?php // Dashboard partial: layout_bottom ?>
+<?php
+declare(strict_types=1);
+
+// Dashboard partial: layout inferior, salud técnica, focos, casos, alertas y actividad.
+?>
 <div class="dash-layout">
     <section>
         <div class="dash-panel">
@@ -40,7 +44,7 @@
                         <div>
                             <div class="dash-health-title">Base de datos</div>
                             <div class="dash-health-text">
-                                Tablas críticas para operación, trazabilidad, alertas y evidencias.
+                                Tablas críticas para operación, trazabilidad, alertas, evidencias y seguimiento.
                             </div>
                         </div>
 
@@ -66,6 +70,47 @@
                         </span>
                     </div>
                 </div>
+
+                <?php if (!$dbOk && $tablasFaltantes): ?>
+                    <div class="dash-empty" style="margin-top:1rem;">
+                        Revisar tablas críticas: <?= e(implode(', ', $tablasFaltantes)) ?>.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="dash-panel">
+            <div class="dash-panel-head">
+                <h3 class="dash-panel-title">
+                    <i class="bi bi-compass"></i>
+                    Focos de gestión
+                </h3>
+
+                <a class="dash-link" href="<?= APP_URL ?>/modules/seguimiento/index.php">
+                    Ver seguimiento
+                </a>
+            </div>
+
+            <div class="dash-panel-body">
+                <?php foreach ($focosGestion as $foco): ?>
+                    <article class="dash-item">
+                        <div class="dash-item-title">
+                            <a href="<?= e((string)$foco['url']) ?>">
+                                <?= e((string)$foco['titulo']) ?>
+                            </a>
+                        </div>
+
+                        <div>
+                            <span class="dash-badge <?= e((string)$foco['badge']) ?>">
+                                <?= number_format((int)$foco['valor'], 0, ',', '.') ?> caso(s)
+                            </span>
+                        </div>
+
+                        <div class="dash-text">
+                            <?= e((string)$foco['texto']) ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
             </div>
         </div>
 
@@ -88,6 +133,11 @@
                     </div>
                 <?php else: ?>
                     <?php foreach ($casosRecientes as $caso): ?>
+                        <?php
+                            $estadoVisible = (string)($caso['estado_formal'] ?: dash_label((string)$caso['estado']));
+                            $riesgoVisible = (string)($caso['riesgo_final'] ?? '');
+                            $planesCount = (int)($caso['planes_count'] ?? 0);
+                        ?>
                         <article class="dash-item">
                             <div class="dash-item-title">
                                 <a href="<?= APP_URL ?>/modules/denuncias/ver.php?id=<?= (int)$caso['id'] ?>">
@@ -97,20 +147,34 @@
 
                             <div>
                                 <span class="dash-badge soft">
-                                    <?= e($caso['estado_formal'] ?: dash_label((string)$caso['estado'])) ?>
-                                </span>
-
-                                <span class="dash-badge <?= e(dash_badge((string)$caso['semaforo'])) ?>">
-                                    Semáforo <?= e(dash_label((string)$caso['semaforo'])) ?>
+                                    <?= e($estadoVisible) ?>
                                 </span>
 
                                 <span class="dash-badge <?= e(dash_badge((string)$caso['prioridad'])) ?>">
                                     Prioridad <?= e(dash_label((string)$caso['prioridad'])) ?>
                                 </span>
 
-                                <?php if ((int)$caso['alertas_pendientes'] > 0): ?>
+                                <?php if ($riesgoVisible !== ''): ?>
+                                    <span class="dash-badge <?= e(dash_badge($riesgoVisible)) ?>">
+                                        Riesgo <?= e(dash_label($riesgoVisible)) ?>
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php if ($planesCount === 0 && (int)($caso['estado_caso_id'] ?? 0) !== 5): ?>
+                                    <span class="dash-badge warn">
+                                        Sin plan
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php if ((int)($caso['alertas_pendientes'] ?? 0) > 0): ?>
                                     <span class="dash-badge danger">
                                         <?= (int)$caso['alertas_pendientes'] ?> alerta(s)
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php if ((int)($caso['posible_aula_segura'] ?? 0) === 1): ?>
+                                    <span class="dash-badge warn">
+                                        Aula Segura
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -158,7 +222,19 @@
                         </div>
                         <div>
                             <div class="dash-tool-title">Seguimiento</div>
-                            <div class="dash-tool-text">Gestionar casos activos.</div>
+                            <div class="dash-tool-text">Gestionar casos activos y planes.</div>
+                        </div>
+                    </a>
+
+                    <a class="dash-tool" href="<?= APP_URL ?>/modules/alertas/index.php">
+                        <div class="dash-tool-icon warn">
+                            <i class="bi bi-bell"></i>
+                        </div>
+                        <div>
+                            <div class="dash-tool-title">Alertas</div>
+                            <div class="dash-tool-text">
+                                <?= number_format($totalAlertasPendientes, 0, ',', '.') ?> alerta(s) pendiente(s).
+                            </div>
                         </div>
                     </a>
 
@@ -169,6 +245,16 @@
                         <div>
                             <div class="dash-tool-title">Comunidad</div>
                             <div class="dash-tool-text">Alumnos, apoderados y funcionarios.</div>
+                        </div>
+                    </a>
+
+                    <a class="dash-tool" href="<?= APP_URL ?>/modules/inclusion/index.php">
+                        <div class="dash-tool-icon">
+                            <i class="bi bi-universal-access"></i>
+                        </div>
+                        <div>
+                            <div class="dash-tool-title">Inclusión y TEA</div>
+                            <div class="dash-tool-text">Protocolos y reportes de inclusión.</div>
                         </div>
                     </a>
 
@@ -201,16 +287,6 @@
                         <div>
                             <div class="dash-tool-title">Reportes</div>
                             <div class="dash-tool-text">Indicadores y CSV.</div>
-                        </div>
-                    </a>
-
-                    <a class="dash-tool" href="<?= APP_URL ?>/modules/admin/respaldo.php">
-                        <div class="dash-tool-icon">
-                            <i class="bi bi-database-down"></i>
-                        </div>
-                        <div>
-                            <div class="dash-tool-title">Respaldo SQL</div>
-                            <div class="dash-tool-text">Descargar base activa.</div>
                         </div>
                     </a>
 

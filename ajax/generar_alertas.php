@@ -2,135 +2,220 @@
 declare(strict_types=1);
 /**
  * Motor de alertas automáticas — Metis
- * Detecta condiciones de riesgo y genera alertas en caso_alertas
+ * Fase 16: generación sin semáforo legacy y con validación por colegio vía casos.
  */
 require_once dirname(__DIR__) . '/config/app.php';
 require_once dirname(__DIR__) . '/core/DB.php';
 require_once dirname(__DIR__) . '/core/Auth.php';
+require_once dirname(__DIR__) . '/core/helpers.php';
 
 Auth::requireLogin();
 header('Content-Type: application/json; charset=utf-8');
 
-$pdo       = DB::conn();
-$user      = Auth::user() ?? [];
-$cid       = (int)($user['colegio_id'] ?? 0);
+$pdo = DB::conn();
+$user = Auth::user() ?? [];
+$colegioId = (int)($user['colegio_id'] ?? 0);
+$userId = (int)($user['id'] ?? 0);
 $generadas = 0;
-$errores   = [];
+$errores = [];
 
-if ($cid <= 0) { echo json_encode(['ok'=>false,'msg'=>'Sin colegio']); exit; }
-
-function alerta_unica(PDO $pdo, int $cid, int $casoId, string $tipo,
-    string $titulo, string $desc, string $prio = 'media'): bool {
-    try {
-        $s = $pdo->prepare("SELECT id FROM caso_alertas
-            WHERE colegio_id=? AND caso_id=? AND tipo=? AND estado='pendiente' LIMIT 1");
-        $s->execute([$cid, $casoId, $tipo]);
-        if ($s->fetchColumn()) return false;
-        $pdo->prepare("INSERT INTO caso_alertas
-            (caso_id,colegio_id,tipo,mensaje,prioridad,estado,fecha_alerta,created_at)
-            VALUES (?,?,?,?,?,'pendiente',NOW(),NOW())")
-            ->execute([$casoId,$cid,$tipo,"$titulo — $desc",$prio]);
-        return true;
-    } catch (Throwable $e) { return false; }
+if ($colegioId <= 0) {
+    echo json_encode(['ok' => false, 'msg' => 'Sin colegio activo.']);
+    exit;
 }
 
+$canOperate = false;
 try {
-    // 1. Casos sin movimiento 7+ días
-    $s = $pdo->prepare("SELECT id,numero_caso,semaforo,
-        DATEDIFF(NOW(),updated_at) AS dias FROM casos
-        WHERE colegio_id=? AND estado NOT IN('cerrado','archivado','borrador')
-        AND DATEDIFF(NOW(),updated_at)>=7 LIMIT 50");
-    $s->execute([$cid]);
-    foreach ($s->fetchAll() as $c) {
-        $dias = (int)$c['dias'];
-        if (alerta_unica($pdo,$cid,(int)$c['id'],
-            'sin_movimiento_'.($dias>=15?'15':'7'),
-            "Caso sin movimiento: {$c['numero_caso']}",
-            "El expediente lleva {$dias} días sin actualizaciones.",
-            $dias>=15?'alta':'media')) $generadas++;
+    $canOperate = Auth::canOperate();
+} catch (Throwable $e) {
+    $canOperate = false;
+}
+
+if (!$canOperate && method_exists('Auth', 'can')) {
+    foreach (['gestionar_casos', 'crear_denuncia', 'gestionar_alertas', 'gestionar_seguimiento'] as $permiso) {
+        try {
+            if (Auth::can($permiso)) {
+                $canOperate = true;
+                break;
+            }
+        } catch (Throwable $e) {
+            // Ignorar permisos inexistentes.
+        }
+    }
+}
+
+if (!$canOperate) {
+    echo json_encode(['ok' => false, 'msg' => 'No tiene permisos para generar alertas.']);
+    exit;
+}
+
+function alerta_texto_prioridad(?string $value): string
+{
+    $value = strtolower(trim((string)$value));
+    return in_array($value, ['baja', 'media', 'alta'], true) ? $value : 'media';
+}
+
+function alerta_automatica_unica(PDO $pdo, int $casoId, string $tipo, string $mensaje, string $prioridad = 'media'): bool
+{
+    $tipo = trim($tipo);
+    $mensaje = trim($mensaje);
+    $prioridad = alerta_texto_prioridad($prioridad);
+
+    if ($casoId <= 0 || $tipo === '' || $mensaje === '') {
+        return false;
     }
 
-    // 2. Próxima revisión vencida
     try {
-        $s = $pdo->prepare("SELECT DISTINCT c.id,c.numero_caso,
-            MIN(css.proxima_revision) AS proxima
-            FROM casos c INNER JOIN caso_seguimiento_sesion css ON css.caso_id=c.id
-            WHERE c.colegio_id=? AND c.estado NOT IN('cerrado','archivado','borrador')
-            AND css.proxima_revision<CURDATE() AND css.proxima_revision IS NOT NULL
-            GROUP BY c.id,c.numero_caso LIMIT 30");
-        $s->execute([$cid]);
-        foreach ($s->fetchAll() as $c) {
-            if (alerta_unica($pdo,$cid,(int)$c['id'],'revision_vencida',
-                "Revisión vencida: {$c['numero_caso']}",
-                "Fecha límite: ".date('d-m-Y',strtotime($c['proxima'])),'alta')) $generadas++;
-        }
-    } catch (Throwable $e) { $errores[]='revisiones: '.$e->getMessage(); }
+        $stmt = $pdo->prepare("\n            SELECT id\n            FROM caso_alertas\n            WHERE caso_id = ?\n              AND tipo = ?\n              AND estado = 'pendiente'\n            LIMIT 1\n        ");
+        $stmt->execute([$casoId, $tipo]);
 
-    // 3. Semáforo rojo sin plan de acción
-    try {
-        $s = $pdo->prepare("SELECT c.id,c.numero_caso FROM casos c
-            LEFT JOIN caso_plan_accion pa ON pa.caso_id=c.id AND pa.vigente=1
-            WHERE c.colegio_id=? AND c.semaforo IN('rojo','negro')
-            AND c.estado NOT IN('cerrado','archivado','borrador') AND pa.id IS NULL LIMIT 20");
-        $s->execute([$cid]);
-        foreach ($s->fetchAll() as $c) {
-            if (alerta_unica($pdo,$cid,(int)$c['id'],'rojo_sin_plan',
-                "Caso crítico sin plan: {$c['numero_caso']}",
-                "Semáforo rojo/negro sin plan de acción definido.",'alta')) $generadas++;
+        if ($stmt->fetchColumn()) {
+            return false;
         }
-    } catch (Throwable $e) { $errores[]='rojo_sin_plan: '.$e->getMessage(); }
 
-    // 4. TEA sin derivar 3+ días
-    try {
-        $s = $pdo->prepare("SELECT ace.id,
-            CONCAT_WS(' ',a.apellido_paterno,a.nombres) AS nombre,
-            DATEDIFF(NOW(),ace.created_at) AS dias
-            FROM alumno_condicion_especial ace
-            INNER JOIN alumnos a ON a.id=ace.alumno_id
-            WHERE ace.colegio_id=? AND ace.tipo_condicion LIKE 'tea%'
-            AND ace.derivado_salud=0 AND ace.estado_diagnostico IN('sospecha','en_proceso')
-            AND DATEDIFF(NOW(),ace.created_at)>=3 AND ace.activo=1 LIMIT 20");
-        $s->execute([$cid]);
-        foreach ($s->fetchAll() as $al) {
-            $chk = $pdo->prepare("SELECT id FROM caso_alertas
-                WHERE colegio_id=? AND tipo='tea_sin_derivar'
-                AND estado='pendiente' AND mensaje LIKE ? LIMIT 1");
-            $chk->execute([$cid,'%id:'.(int)$al['id'].'%']);
-            if ($chk->fetchColumn()) continue;
-            $pdo->prepare("INSERT INTO caso_alertas
-                (caso_id,colegio_id,tipo,mensaje,prioridad,estado,fecha_alerta,created_at)
-                VALUES (0,?,'tea_sin_derivar',?,'alta','pendiente',NOW(),NOW())")
-                ->execute([$cid,"TEA sin derivar: {$al['nombre']} (id:{$al['id']}) — {$al['dias']} días. Art.12 Ley 21.545."]);
-            $generadas++;
-        }
-    } catch (Throwable $e) { $errores[]='tea: '.$e->getMessage(); }
+        $stmt = $pdo->prepare("\n            INSERT INTO caso_alertas (\n                caso_id,\n                tipo,\n                mensaje,\n                prioridad,\n                estado,\n                fecha_alerta,\n                created_at\n            ) VALUES (?, ?, ?, ?, 'pendiente', NOW(), NOW())\n        ");
+        $stmt->execute([$casoId, $tipo, $mensaje, $prioridad]);
 
-    // 5. Pauta de riesgo crítica sin actuación reciente
-    try {
-        $s = $pdo->prepare("SELECT c.id,c.numero_caso,pr.nivel_riesgo
-            FROM caso_pauta_riesgo pr INNER JOIN casos c ON c.id=pr.caso_id
-            WHERE pr.colegio_id=? AND pr.vigente=1
-            AND pr.nivel_riesgo IN('alto','critico')
-            AND c.estado NOT IN('cerrado','archivado')
-            AND DATEDIFF(NOW(),pr.created_at)>=1 LIMIT 20");
-        $s->execute([$cid]);
-        foreach ($s->fetchAll() as $c) {
-            if (alerta_unica($pdo,$cid,(int)$c['id'],'pauta_critica',
-                "Pauta crítica: {$c['numero_caso']}",
-                "Nivel ".strtoupper($c['nivel_riesgo'])." — Intervención inmediata requerida.",'alta')) $generadas++;
-        }
-    } catch (Throwable $e) { $errores[]='pauta: '.$e->getMessage(); }
-
-} catch (Throwable $e) {
-    echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]); exit;
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
-// Contar pendientes para badge sidebar
 try {
-    $cnt = $pdo->prepare("SELECT COUNT(*) FROM caso_alertas WHERE colegio_id=? AND estado='pendiente'");
-    $cnt->execute([$cid]);
-    $pendientes = (int)$cnt->fetchColumn();
-} catch (Throwable $e) { $pendientes = 0; }
+    // 1) Casos abiertos sin movimiento reciente, usando historial cuando existe y updated_at como respaldo.
+    try {
+        $stmt = $pdo->prepare("\n            SELECT\n                c.id,\n                c.numero_caso,\n                c.prioridad,\n                DATEDIFF(NOW(), COALESCE(h.ultimo_movimiento, c.updated_at, c.fecha_ingreso)) AS dias\n            FROM casos c\n            LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n            LEFT JOIN (\n                SELECT caso_id, MAX(created_at) AS ultimo_movimiento\n                FROM caso_historial\n                GROUP BY caso_id\n            ) h ON h.caso_id = c.id\n            WHERE c.colegio_id = ?\n              AND COALESCE(ec.codigo, c.estado, '') NOT IN ('cerrado', 'borrador', 'archivado')\n              AND c.estado NOT IN ('cerrado', 'borrador', 'archivado')\n              AND DATEDIFF(NOW(), COALESCE(h.ultimo_movimiento, c.updated_at, c.fecha_ingreso)) >= 7\n            ORDER BY dias DESC\n            LIMIT 50\n        ");
+        $stmt->execute([$colegioId]);
 
-echo json_encode(['ok'=>true,'generadas'=>$generadas,'pendientes'=>$pendientes,
-    'errores'=>$errores,'ts'=>date('H:i')]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $caso) {
+            $dias = (int)($caso['dias'] ?? 0);
+            $tipo = $dias >= 15 ? 'sin_movimiento_15' : 'sin_movimiento_7';
+            $prioridad = $dias >= 15 ? 'alta' : 'media';
+            $mensaje = 'Caso sin movimiento: ' . (string)$caso['numero_caso'] . ' — El expediente lleva ' . $dias . ' días sin actualización registrada.';
+
+            if (alerta_automatica_unica($pdo, (int)$caso['id'], $tipo, $mensaje, $prioridad)) {
+                $generadas++;
+            }
+        }
+    } catch (Throwable $e) {
+        $errores[] = 'sin_movimiento: ' . $e->getMessage();
+    }
+
+    // 2) Seguimientos con próxima revisión vencida.
+    try {
+        $stmt = $pdo->prepare("\n            SELECT\n                c.id,\n                c.numero_caso,\n                MIN(cs.proxima_revision) AS proxima\n            FROM casos c\n            INNER JOIN caso_seguimiento cs ON cs.caso_id = c.id AND cs.colegio_id = c.colegio_id\n            LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n            WHERE c.colegio_id = ?\n              AND cs.proxima_revision IS NOT NULL\n              AND cs.proxima_revision < CURDATE()\n              AND COALESCE(cs.estado_seguimiento, cs.estado, '') NOT IN ('cerrado', 'completado', 'finalizado')\n              AND COALESCE(ec.codigo, c.estado, '') NOT IN ('cerrado', 'borrador', 'archivado')\n              AND c.estado NOT IN ('cerrado', 'borrador', 'archivado')\n            GROUP BY c.id, c.numero_caso\n            LIMIT 50\n        ");
+        $stmt->execute([$colegioId]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $caso) {
+            $fecha = $caso['proxima'] ? date('d-m-Y', strtotime((string)$caso['proxima'])) : 'sin fecha';
+            $mensaje = 'Revisión vencida: ' . (string)$caso['numero_caso'] . ' — Fecha límite: ' . $fecha . '.';
+
+            if (alerta_automatica_unica($pdo, (int)$caso['id'], 'revision_vencida', $mensaje, 'alta')) {
+                $generadas++;
+            }
+        }
+    } catch (Throwable $e) {
+        $errores[] = 'revision_vencida: ' . $e->getMessage();
+    }
+
+    // 3) Casos en investigación/seguimiento/resolución sin plan de acción vigente.
+    try {
+        $stmt = $pdo->prepare("\n            SELECT\n                c.id,\n                c.numero_caso,\n                c.prioridad,\n                ec.codigo AS estado_codigo\n            FROM casos c\n            LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n            LEFT JOIN caso_plan_accion pa\n                ON pa.caso_id = c.id\n               AND pa.colegio_id = c.colegio_id\n               AND pa.vigente = 1\n            WHERE c.colegio_id = ?\n              AND COALESCE(ec.codigo, '') IN ('investigacion', 'resolucion', 'seguimiento')\n              AND c.estado NOT IN ('cerrado', 'borrador', 'archivado')\n              AND pa.id IS NULL\n            LIMIT 50\n        ");
+        $stmt->execute([$colegioId]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $caso) {
+            $prioridad = alerta_texto_prioridad((string)($caso['prioridad'] ?? 'media'));
+            $prioridadAlerta = $prioridad === 'alta' ? 'alta' : 'media';
+            $mensaje = 'Caso sin plan de acción: ' . (string)$caso['numero_caso'] . ' — El expediente se encuentra en gestión activa, pero no registra plan vigente.';
+
+            if (alerta_automatica_unica($pdo, (int)$caso['id'], 'sin_plan_accion', $mensaje, $prioridadAlerta)) {
+                $generadas++;
+            }
+        }
+    } catch (Throwable $e) {
+        $errores[] = 'sin_plan_accion: ' . $e->getMessage();
+    }
+
+    // 4) Planes vencidos pendientes o en proceso.
+    try {
+        $stmt = $pdo->prepare("\n            SELECT\n                c.id,\n                c.numero_caso,\n                MIN(pi.fecha_vencimiento) AS fecha_vencimiento\n            FROM caso_plan_intervencion pi\n            INNER JOIN casos c ON c.id = pi.caso_id AND c.colegio_id = pi.colegio_id\n            LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n            WHERE c.colegio_id = ?\n              AND pi.fecha_vencimiento IS NOT NULL\n              AND pi.fecha_vencimiento < CURDATE()\n              AND pi.estado IN ('pendiente', 'en_proceso')\n              AND COALESCE(ec.codigo, c.estado, '') NOT IN ('cerrado', 'borrador', 'archivado')\n              AND c.estado NOT IN ('cerrado', 'borrador', 'archivado')\n            GROUP BY c.id, c.numero_caso\n            LIMIT 50\n        ");
+        $stmt->execute([$colegioId]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $caso) {
+            $fecha = $caso['fecha_vencimiento'] ? date('d-m-Y', strtotime((string)$caso['fecha_vencimiento'])) : 'sin fecha';
+            $mensaje = 'Plan vencido: ' . (string)$caso['numero_caso'] . ' — Existe una acción con vencimiento anterior al ' . $fecha . ' sin cierre registrado.';
+
+            if (alerta_automatica_unica($pdo, (int)$caso['id'], 'plan_vencido', $mensaje, 'alta')) {
+                $generadas++;
+            }
+        }
+    } catch (Throwable $e) {
+        $errores[] = 'plan_vencido: ' . $e->getMessage();
+    }
+
+    // 5) Pauta de riesgo alto/crítico sin derivación.
+    try {
+        $stmt = $pdo->prepare("\n            SELECT DISTINCT\n                c.id,\n                c.numero_caso,\n                pr.nivel_final\n            FROM caso_pauta_riesgo pr\n            INNER JOIN casos c ON c.id = pr.caso_id\n            LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n            WHERE c.colegio_id = ?\n              AND pr.nivel_final IN ('alto', 'critico')\n              AND COALESCE(pr.derivado, 0) = 0\n              AND COALESCE(ec.codigo, c.estado, '') NOT IN ('cerrado', 'borrador', 'archivado')\n              AND c.estado NOT IN ('cerrado', 'borrador', 'archivado')\n            LIMIT 50\n        ");
+        $stmt->execute([$colegioId]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $caso) {
+            $nivel = strtoupper((string)($caso['nivel_final'] ?? 'alto'));
+            $mensaje = 'Riesgo ' . $nivel . ' sin derivación: ' . (string)$caso['numero_caso'] . ' — Revisar derivación y medidas de resguardo.';
+
+            if (alerta_automatica_unica($pdo, (int)$caso['id'], 'riesgo_alto_sin_derivacion', $mensaje, 'alta')) {
+                $generadas++;
+            }
+        }
+    } catch (Throwable $e) {
+        $errores[] = 'riesgo_alto_sin_derivacion: ' . $e->getMessage();
+    }
+
+    // 6) Aula Segura marcada como posible sin decisión directiva.
+    try {
+        $stmt = $pdo->prepare("\n            SELECT\n                c.id,\n                c.numero_caso,\n                c.aula_segura_estado\n            FROM casos c\n            LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n            WHERE c.colegio_id = ?\n              AND COALESCE(c.posible_aula_segura, 0) = 1\n              AND COALESCE(c.aula_segura_estado, '') IN ('posible', 'en_evaluacion', 'no_aplica', '')\n              AND COALESCE(ec.codigo, c.estado, '') NOT IN ('cerrado', 'borrador', 'archivado')\n              AND c.estado NOT IN ('cerrado', 'borrador', 'archivado')\n            LIMIT 50\n        ");
+        $stmt->execute([$colegioId]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $caso) {
+            $mensaje = 'Aula Segura pendiente: ' . (string)$caso['numero_caso'] . ' — El expediente fue marcado como posible Aula Segura y requiere evaluación directiva.';
+
+            if (alerta_automatica_unica($pdo, (int)$caso['id'], 'aula_segura_pendiente', $mensaje, 'alta')) {
+                $generadas++;
+            }
+        }
+    } catch (Throwable $e) {
+        $errores[] = 'aula_segura_pendiente: ' . $e->getMessage();
+    }
+
+    try {
+        registrar_bitacora(
+            'alertas',
+            'generar_alertas',
+            'caso_alertas',
+            null,
+            'Generación automática de alertas. Nuevas: ' . $generadas
+        );
+    } catch (Throwable $e) {
+        // La bitácora no debe bloquear el JSON.
+    }
+
+} catch (Throwable $e) {
+    echo json_encode(['ok' => false, 'msg' => $e->getMessage()]);
+    exit;
+}
+
+try {
+    $stmt = $pdo->prepare("\n        SELECT COUNT(*)\n        FROM caso_alertas a\n        INNER JOIN casos c ON c.id = a.caso_id\n        WHERE c.colegio_id = ?\n          AND a.estado = 'pendiente'\n    ");
+    $stmt->execute([$colegioId]);
+    $pendientes = (int)$stmt->fetchColumn();
+} catch (Throwable $e) {
+    $pendientes = 0;
+}
+
+echo json_encode([
+    'ok' => true,
+    'generadas' => $generadas,
+    'pendientes' => $pendientes,
+    'errores' => $errores,
+    'ts' => date('H:i'),
+]);

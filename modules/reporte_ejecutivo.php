@@ -352,11 +352,6 @@ function inf_label(string $v): string {
     ];
     return $map[$v] ?? ucfirst(str_replace(['_','-'], ' ', $v));
 }
-function inf_semaforo_css(string $s): string {
-    return match($s) {
-        'rojo'=>'#dc2626','negro'=>'#0f172a','amarillo'=>'#d97706',default=>'#059669'
-    };
-}
 function inf_nivel_css(string $n): string {
     return match($n) {
         'critico'=>'#0f172a','alto'=>'#dc2626','medio'=>'#d97706',default=>'#059669'
@@ -451,12 +446,6 @@ $secNum     = 1; // contador de secciones
     .inf-header-meta p  { font-size: .78rem; color: #93c5fd; margin-bottom: .1rem; }
     .inf-header-right   { text-align: right; font-size: .75rem; color: #93c5fd; flex-shrink: 0; }
     .inf-header-right strong { display: block; font-size: 1rem; color: #fff; margin-bottom: .1rem; }
-    .inf-semaforo-badge {
-        display: inline-block; border-radius: 6px;
-        padding: .2rem .65rem; font-size: .72rem; font-weight: 800;
-        margin-top: .4rem; background: #fff;
-    }
-
     /* ── Índice de secciones ──────────────────────────────── */
     .inf-indice {
         background: #f8fafc;
@@ -691,13 +680,6 @@ $secNum     = 1; // contador de secciones
             <strong><?= $numeroCaso ?></strong>
             <div>Ingreso: <?= inf_fecha((string)($caso['fecha_ingreso'] ?? $caso['created_at'] ?? '')) ?></div>
             <div>Emitido: <?= $emitidoEn ?></div>
-            <?php
-            $sem      = strtolower((string)($caso['semaforo'] ?? 'verde'));
-            $semColor = inf_semaforo_css($sem);
-            ?>
-            <div class="inf-semaforo-badge" style="color:<?= $semColor ?>;">
-                ● Semáforo: <?= ucfirst($sem) ?>
-            </div>
         </div>
     </div>
 
@@ -738,8 +720,6 @@ $secNum     = 1; // contador de secciones
                         <td><strong><?= $numeroCaso ?></strong></td></tr>
                     <tr><th>Estado formal</th>
                         <td><?= e(inf_label((string)($caso['estado_nombre'] ?? $caso['estado'] ?? ''))) ?></td></tr>
-                    <tr><th>Semáforo</th>
-                        <td><span style="color:<?= $semColor ?>;font-weight:700;">● <?= ucfirst($sem) ?></span></td></tr>
                     <tr><th>Prioridad</th>
                         <td><?= e(inf_label((string)($caso['prioridad'] ?? 'media'))) ?></td></tr>
                     <tr><th>Fecha de ingreso</th>

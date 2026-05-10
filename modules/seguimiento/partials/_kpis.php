@@ -4,8 +4,8 @@
         <div class="seg-kpi-lbl">Casos activos</div>
     </div>
     <div class="seg-kpi">
-        <div class="seg-kpi-val <?= $kpi['rojo'] > 0 ? 'warn' : 'ok' ?>"><?= $kpi['rojo'] ?></div>
-        <div class="seg-kpi-lbl">Semáforo rojo/negro</div>
+        <div class="seg-kpi-val <?= $kpi['riesgo_alto'] > 0 ? 'warn' : 'ok' ?>"><?= $kpi['riesgo_alto'] ?></div>
+        <div class="seg-kpi-lbl">Riesgo alto/crítico</div>
     </div>
     <div class="seg-kpi">
         <div class="seg-kpi-val <?= $kpi['revision_vencida'] > 0 ? 'warn' : 'ok' ?>"><?= $kpi['revision_vencida'] ?></div>
@@ -22,6 +22,10 @@
     <div class="seg-kpi">
         <div class="seg-kpi-val <?= $kpi['alta'] > 0 ? 'amber' : 'ok' ?>"><?= $kpi['alta'] ?></div>
         <div class="seg-kpi-lbl">Prioridad alta</div>
+    </div>
+    <div class="seg-kpi">
+        <div class="seg-kpi-val <?= $kpi['alertas_pendientes'] > 0 ? 'warn' : 'ok' ?>"><?= $kpi['alertas_pendientes'] ?></div>
+        <div class="seg-kpi-lbl">Alertas pendientes</div>
     </div>
     <div class="seg-kpi">
         <div class="seg-kpi-val <?= $kpi['sin_pauta_riesgo'] > 0 ? 'warn' : 'ok' ?>"><?= $kpi['sin_pauta_riesgo'] ?></div>

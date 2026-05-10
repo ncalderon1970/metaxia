@@ -12,6 +12,7 @@ Auth::requireLogin();
 $pdo = DB::conn();
 $user = Auth::user() ?? [];
 $colegioId = (int)($user['colegio_id'] ?? 0);
+$userId = (int)($user['id'] ?? 0);
 
 $pageTitle = 'Alertas · Metis';
 $pageSubtitle = 'Control de alertas institucionales y vencimientos';
@@ -36,12 +37,71 @@ function alerta_clase_prioridad(string $prioridad): string
     };
 }
 
+function alerta_estado_label(string $estado): string
+{
+    return match (strtolower($estado)) {
+        'pendiente' => 'Pendiente',
+        'resuelta' => 'Resuelta',
+        'descartada' => 'Descartada',
+        default => ucfirst(str_replace('_', ' ', $estado)),
+    };
+}
+
+function alerta_tipo_label(string $tipo): string
+{
+    $tipo = strtolower(trim($tipo));
+
+    return match ($tipo) {
+        'sin_movimiento_7' => 'Sin movimiento +7 días',
+        'sin_movimiento_15' => 'Sin movimiento +15 días',
+        'revision_vencida' => 'Revisión vencida',
+        'sin_plan_accion' => 'Sin plan de acción',
+        'plan_vencido' => 'Plan vencido',
+        'riesgo_alto_sin_derivacion' => 'Riesgo alto/crítico sin derivación',
+        'aula_segura_pendiente' => 'Aula Segura pendiente',
+        'vencimiento_programado' => 'Vencimiento programado',
+        default => ucwords(str_replace(['_', '-'], ' ', $tipo !== '' ? $tipo : 'alerta')),
+    };
+}
+
+function alerta_usuario_puede_operar(): bool
+{
+    try {
+        if (Auth::canOperate()) {
+            return true;
+        }
+    } catch (Throwable $e) {
+        // Continuar con permisos específicos.
+    }
+
+    if (!method_exists('Auth', 'can')) {
+        return false;
+    }
+
+    foreach (['gestionar_casos', 'crear_denuncia', 'gestionar_alertas', 'gestionar_seguimiento'] as $permiso) {
+        try {
+            if (Auth::can($permiso)) {
+                return true;
+            }
+        } catch (Throwable $e) {
+            // Ignorar permisos inexistentes.
+        }
+    }
+
+    return false;
+}
+
 $error = '';
 $exito = '';
+$canOperateAlertas = alerta_usuario_puede_operar();
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         CSRF::requireValid($_POST['_token'] ?? null);
+
+        if (!$canOperateAlertas) {
+            throw new RuntimeException('No tiene permisos para modificar alertas.');
+        }
 
         $accion = clean((string)($_POST['_accion'] ?? ''));
 
@@ -49,31 +109,48 @@ try {
             $alertaId = (int)($_POST['alerta_id'] ?? 0);
 
             if ($alertaId <= 0) {
-                $error = 'Alerta no válida.';
-            } else {
-                $stmt = $pdo->prepare("
-                    UPDATE caso_alertas
-                    SET estado = 'resuelta',
-                        resuelta_por = ?,
-                        resuelta_at = NOW()
-                    WHERE id = ?
-                ");
-
-                $stmt->execute([
-                    (int)($user['id'] ?? 0),
-                    $alertaId,
-                ]);
-
-                registrar_bitacora(
-                    'alertas',
-                    'resolver_alerta',
-                    'caso_alertas',
-                    $alertaId,
-                    'Alerta marcada como resuelta.'
-                );
-
-                $exito = 'Alerta marcada como resuelta correctamente.';
+                throw new RuntimeException('Alerta no válida.');
             }
+
+            $stmt = $pdo->prepare("\n                SELECT\n                    a.id,\n                    a.caso_id,\n                    a.tipo,\n                    a.mensaje,\n                    a.estado,\n                    c.numero_caso\n                FROM caso_alertas a\n                INNER JOIN casos c ON c.id = a.caso_id\n                WHERE a.id = ?\n                  AND c.colegio_id = ?\n                LIMIT 1\n            ");
+            $stmt->execute([$alertaId, $colegioId]);
+            $alerta = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$alerta) {
+                throw new RuntimeException('La alerta no existe o no pertenece al establecimiento activo.');
+            }
+
+            if ((string)($alerta['estado'] ?? '') !== 'pendiente') {
+                throw new RuntimeException('Solo se pueden resolver alertas pendientes.');
+            }
+
+            $stmt = $pdo->prepare("\n                UPDATE caso_alertas a\n                INNER JOIN casos c ON c.id = a.caso_id\n                SET a.estado = 'resuelta',\n                    a.resuelta_por = ?,\n                    a.resuelta_at = NOW(),\n                    a.updated_at = NOW()\n                WHERE a.id = ?\n                  AND c.colegio_id = ?\n                  AND a.estado = 'pendiente'\n            ");
+            $stmt->execute([$userId ?: null, $alertaId, $colegioId]);
+
+            if ($stmt->rowCount() < 1) {
+                throw new RuntimeException('No fue posible resolver la alerta.');
+            }
+
+            try {
+                $stmtHist = $pdo->prepare("\n                    INSERT INTO caso_historial (\n                        caso_id,\n                        tipo_evento,\n                        titulo,\n                        detalle,\n                        user_id\n                    ) VALUES (?, 'alerta', 'Alerta resuelta', ?, ?)\n                ");
+                $stmtHist->execute([
+                    (int)$alerta['caso_id'],
+                    'Se marcó como resuelta la alerta: ' . alerta_tipo_label((string)$alerta['tipo']) . '.',
+                    $userId ?: null,
+                ]);
+            } catch (Throwable $e) {
+                // El historial no debe bloquear la resolución de la alerta.
+            }
+
+            registrar_bitacora(
+                'alertas',
+                'resolver_alerta',
+                'caso_alertas',
+                $alertaId,
+                'Alerta marcada como resuelta desde bandeja general.'
+            );
+
+            $exito = 'Alerta marcada como resuelta correctamente.';
         }
     }
 } catch (Throwable $e) {
@@ -83,6 +160,17 @@ try {
 $estadoFiltro = clean((string)($_GET['estado'] ?? 'pendiente'));
 $prioridadFiltro = clean((string)($_GET['prioridad'] ?? ''));
 $q = clean((string)($_GET['q'] ?? ''));
+
+$estadoPermitidos = ['pendiente', 'resuelta', 'descartada', 'todas'];
+$prioridadPermitidas = ['', 'alta', 'media', 'baja'];
+
+if (!in_array($estadoFiltro, $estadoPermitidos, true)) {
+    $estadoFiltro = 'pendiente';
+}
+
+if (!in_array($prioridadFiltro, $prioridadPermitidas, true)) {
+    $prioridadFiltro = '';
+}
 
 $where = [];
 $params = [];
@@ -101,10 +189,11 @@ if ($prioridadFiltro !== '') {
 }
 
 if ($q !== '') {
-    $where[] = '(a.mensaje LIKE ? OR a.tipo LIKE ? OR c.numero_caso LIKE ?)';
-    $params[] = '%' . $q . '%';
-    $params[] = '%' . $q . '%';
-    $params[] = '%' . $q . '%';
+    $where[] = "(\n        CONVERT(a.mensaje USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?\n        OR CONVERT(a.tipo USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?\n        OR CONVERT(c.numero_caso USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?\n    )";
+    $qLike = '%' . mb_strtoupper($q, 'UTF-8') . '%';
+    $params[] = $qLike;
+    $params[] = $qLike;
+    $params[] = $qLike;
 }
 
 $whereSql = 'WHERE ' . implode(' AND ', $where);
@@ -116,79 +205,25 @@ $totalAlta = 0;
 $alertas = [];
 
 try {
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM caso_alertas a
-        INNER JOIN casos c ON c.id = a.caso_id
-        {$whereSql}
-    ");
+    $stmt = $pdo->prepare("\n        SELECT COUNT(*)\n        FROM caso_alertas a\n        INNER JOIN casos c ON c.id = a.caso_id\n        {$whereSql}\n    ");
     $stmt->execute($params);
     $totalAlertas = (int)$stmt->fetchColumn();
 
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM caso_alertas a
-        INNER JOIN casos c ON c.id = a.caso_id
-        WHERE c.colegio_id = ?
-          AND a.estado = 'pendiente'
-    ");
+    $stmt = $pdo->prepare("\n        SELECT COUNT(*)\n        FROM caso_alertas a\n        INNER JOIN casos c ON c.id = a.caso_id\n        WHERE c.colegio_id = ?\n          AND a.estado = 'pendiente'\n    ");
     $stmt->execute([$colegioId]);
     $totalPendientes = (int)$stmt->fetchColumn();
 
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM caso_alertas a
-        INNER JOIN casos c ON c.id = a.caso_id
-        WHERE c.colegio_id = ?
-          AND a.estado = 'resuelta'
-    ");
+    $stmt = $pdo->prepare("\n        SELECT COUNT(*)\n        FROM caso_alertas a\n        INNER JOIN casos c ON c.id = a.caso_id\n        WHERE c.colegio_id = ?\n          AND a.estado = 'resuelta'\n    ");
     $stmt->execute([$colegioId]);
     $totalResueltas = (int)$stmt->fetchColumn();
 
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM caso_alertas a
-        INNER JOIN casos c ON c.id = a.caso_id
-        WHERE c.colegio_id = ?
-          AND a.prioridad = 'alta'
-    ");
+    $stmt = $pdo->prepare("\n        SELECT COUNT(*)\n        FROM caso_alertas a\n        INNER JOIN casos c ON c.id = a.caso_id\n        WHERE c.colegio_id = ?\n          AND a.estado = 'pendiente'\n          AND a.prioridad = 'alta'\n    ");
     $stmt->execute([$colegioId]);
     $totalAlta = (int)$stmt->fetchColumn();
 
-    $stmt = $pdo->prepare("
-        SELECT
-            a.id,
-            a.caso_id,
-            a.tipo,
-            a.mensaje,
-            a.prioridad,
-            a.estado,
-            a.fecha_alerta,
-            a.resuelta_at,
-            c.numero_caso,
-            c.semaforo AS caso_semaforo,
-            c.prioridad AS caso_prioridad
-        FROM caso_alertas a
-        INNER JOIN casos c ON c.id = a.caso_id
-        {$whereSql}
-        ORDER BY
-            CASE a.estado
-                WHEN 'pendiente' THEN 1
-                WHEN 'resuelta' THEN 2
-                ELSE 3
-            END,
-            CASE a.prioridad
-                WHEN 'alta' THEN 1
-                WHEN 'media' THEN 2
-                WHEN 'baja' THEN 3
-                ELSE 4
-            END,
-            a.fecha_alerta DESC,
-            a.id DESC
-        LIMIT 100
-    ");
+    $stmt = $pdo->prepare("\n        SELECT\n            a.id,\n            a.caso_id,\n            a.tipo,\n            a.mensaje,\n            a.prioridad,\n            a.estado,\n            a.fecha_alerta,\n            a.resuelta_at,\n            c.numero_caso,\n            c.prioridad AS caso_prioridad,\n            ec.codigo AS estado_codigo,\n            ec.nombre AS estado_nombre\n        FROM caso_alertas a\n        INNER JOIN casos c ON c.id = a.caso_id\n        LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id\n        {$whereSql}\n        ORDER BY\n            CASE a.estado\n                WHEN 'pendiente' THEN 1\n                WHEN 'resuelta' THEN 2\n                ELSE 3\n            END,\n            CASE a.prioridad\n                WHEN 'alta' THEN 1\n                WHEN 'media' THEN 2\n                WHEN 'baja' THEN 3\n                ELSE 4\n            END,\n            a.fecha_alerta DESC,\n            a.id DESC\n        LIMIT 100\n    ");
     $stmt->execute($params);
-    $alertas = $stmt->fetchAll();
+    $alertas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $error = 'Error al cargar alertas: ' . $e->getMessage();
 }
@@ -617,17 +652,18 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                 $prioridad = strtolower((string)($a['prioridad'] ?? 'media'));
                 $estadoClass = $estado === 'resuelta' ? 'ok' : ($estado === 'pendiente' ? 'warn' : '');
                 $prioridadClass = alerta_clase_prioridad($prioridad);
+                $estadoCasoNombre = trim((string)($a['estado_nombre'] ?? ''));
                 ?>
 
                 <article class="alerta-item">
                     <div>
                         <a class="alerta-caso" href="<?= APP_URL ?>/modules/denuncias/ver.php?id=<?= (int)$a['caso_id'] ?>">
-                            <?= e($a['numero_caso']) ?>
+                            <?= e((string)$a['numero_caso']) ?>
                         </a>
 
                         <div>
                             <span class="badge-alerta <?= e($estadoClass) ?>">
-                                Estado: <?= e(ucfirst($estado)) ?>
+                                Estado: <?= e(alerta_estado_label($estado)) ?>
                             </span>
 
                             <span class="badge-alerta <?= e($prioridadClass) ?>">
@@ -635,12 +671,18 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                             </span>
 
                             <span class="badge-alerta">
-                                Tipo: <?= e($a['tipo']) ?>
+                                Tipo: <?= e(alerta_tipo_label((string)$a['tipo'])) ?>
                             </span>
+
+                            <?php if ($estadoCasoNombre !== ''): ?>
+                                <span class="badge-alerta">
+                                    Caso: <?= e($estadoCasoNombre) ?>
+                                </span>
+                            <?php endif; ?>
                         </div>
 
                         <div class="alerta-text">
-                            <?= nl2br(e($a['mensaje'])) ?>
+                            <?= nl2br(e((string)$a['mensaje'])) ?>
                         </div>
 
                         <div class="alerta-meta">
@@ -657,7 +699,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                             Abrir caso
                         </a>
 
-                        <?php if ($estado === 'pendiente'): ?>
+                        <?php if ($estado === 'pendiente' && $canOperateAlertas): ?>
                             <form method="post" style="margin-top:.5rem;">
                                 <?= CSRF::field() ?>
                                 <input type="hidden" name="_accion" value="resolver">

@@ -45,6 +45,7 @@
                 <tr>
                     <th>N° Caso</th>
                     <th>Riesgo</th>
+                    <th>Prioridad</th>
                     <th>Estado</th>
                     <th>Partic.</th>
                     <th>Plan</th>
@@ -57,7 +58,6 @@
             </thead>
             <tbody>
             <?php foreach ($casos as $c):
-                $sem    = (string)($c['semaforo'] ?? 'verde');
                 $nivelR = (string)($c['nivel_riesgo'] ?? '');
                 $tieneRevFutura  = !empty($c['proxima_revision']);
                 $tieneRevVencida = !empty($c['revision_vencida_fecha']) && !$tieneRevFutura;
@@ -67,26 +67,20 @@
                         ? date('d-m-Y', strtotime((string)$c['revision_vencida_fecha']))
                         : '—');
                 $revVencida = $tieneRevVencida;
-                $rowCls = match(true) {
-                    $sem === 'negro'  => 'row-critico',
-                    $sem === 'rojo'   => 'row-rojo',
-                    $revVencida       => 'row-vencida',
-                    default           => '',
+                $rowCls = match (true) {
+                    $nivelR === 'critico' => 'row-critico',
+                    $nivelR === 'alto'    => 'row-rojo',
+                    $revVencida           => 'row-vencida',
+                    default               => '',
                 };
-                $semBadge = match($sem) {
-                    'negro'    => '<span class="badge badge-negro"><span class="dot" style="background:#94a3b8;"></span> Negro</span>',
-                    'rojo'     => '<span class="badge badge-rojo"><span class="dot" style="background:#dc2626;"></span> Rojo</span>',
-                    'amarillo' => '<span class="badge badge-amarillo"><span class="dot" style="background:#d97706;"></span> Amarillo</span>',
-                    default    => '<span class="badge badge-verde"><span class="dot" style="background:#059669;"></span> Verde</span>',
-                };
-                $riesgoBadge = match($nivelR) {
+                $riesgoBadge = match ($nivelR) {
                     'critico' => '<span class="badge badge-negro">Crítico</span>',
                     'alto'    => '<span class="badge badge-rojo">Alto</span>',
                     'medio'   => '<span class="badge badge-amarillo">Medio</span>',
                     'bajo'    => '<span class="badge badge-verde">Bajo</span>',
                     default   => '<span class="badge" style="background:#fee2e2;color:#b91c1c;" title="Sin pauta de riesgo"><i class="bi bi-exclamation-triangle-fill"></i> Sin pauta</span>',
                 };
-                $prioBadge = match($c['prioridad'] ?? '') {
+                $prioBadge = match ((string)($c['prioridad'] ?? '')) {
                     'alta'  => '<span class="badge badge-rojo">Alta</span>',
                     'media' => '<span class="badge badge-amarillo">Media</span>',
                     default => '<span class="badge badge-gris">Baja</span>',
@@ -100,6 +94,7 @@
                         </a>
                     </td>
                     <td><?= $riesgoBadge ?></td>
+                    <td><?= $prioBadge ?></td>
                     <td style="font-size:.78rem;color:#475569;">
                         <?= e((string)($c['estado_formal'] ?? $c['estado'] ?? '')) ?>
                     </td>

@@ -2,8 +2,12 @@
 declare(strict_types=1);
 /**
  * Módulo Seguimiento — Dashboard ejecutivo de casos activos
- * Vista panorámica para director y encargado de convivencia
- * El trabajo operativo vive en denuncias/ver.php → tabs Plan de Acción y Seguimiento
+ * Vista panorámica para director y encargado de convivencia.
+ *
+ * Fase 15:
+ * - elimina dependencia visual/operativa de semáforo legacy;
+ * - usa estado formal, prioridad, pauta de riesgo, sesiones, alertas y plan vigente;
+ * - refuerza multi-tenancy en subconsultas por colegio_id.
  */
 require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
@@ -17,61 +21,29 @@ $user      = Auth::user() ?? [];
 $cid       = (int)($user['colegio_id'] ?? 0);
 $pageTitle = 'Seguimiento · Metis';
 
-// ── KPIs (siempre sobre todos los casos, sin filtro de fecha) ────────────────
-$kpi = ['total'=>0,'en_seguimiento'=>0,'rojo'=>0,'alta'=>0,
-        'sin_plan'=>0,'revision_vencida'=>0,'con_sesion_hoy'=>0,'sin_pauta_riesgo'=>0];
-try {
-    $s = $pdo->prepare("SELECT
-        COUNT(*)                                                         AS total,
-        SUM(c.estado NOT IN ('cerrado','archivado','borrador'))          AS en_seguimiento,
-        SUM(c.semaforo IN ('rojo','negro'))                             AS rojo,
-        SUM(c.prioridad = 'alta')                                       AS alta
-        FROM casos c WHERE c.colegio_id = ?");
-    $s->execute([$cid]);
-    $r = $s->fetch();
-    foreach (['total','en_seguimiento','rojo','alta'] as $k)
-        $kpi[$k] = (int)($r[$k] ?? 0);
+function seg_norm_date(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
 
-    try {
-        $s2 = $pdo->prepare("SELECT COUNT(DISTINCT c.id) FROM casos c
-            LEFT JOIN caso_plan_accion pa ON pa.caso_id=c.id AND pa.vigente=1
-            WHERE c.colegio_id=? AND c.estado NOT IN('cerrado','archivado','borrador')
-            AND pa.id IS NULL");
-        $s2->execute([$cid]);
-        $kpi['sin_plan'] = (int)$s2->fetchColumn();
-    } catch (Throwable $e) {}
-
-    try {
-        $s3 = $pdo->prepare("SELECT COUNT(DISTINCT caso_id) FROM caso_seguimiento_sesion
-            WHERE colegio_id=? AND proxima_revision<CURDATE() AND proxima_revision IS NOT NULL");
-        $s3->execute([$cid]);
-        $kpi['revision_vencida'] = (int)$s3->fetchColumn();
-    } catch (Throwable $e) {}
-
-    try {
-        $s4 = $pdo->prepare("SELECT COUNT(DISTINCT caso_id) FROM caso_seguimiento_sesion
-            WHERE colegio_id=? AND DATE(created_at)=CURDATE()");
-        $s4->execute([$cid]);
-        $kpi['con_sesion_hoy'] = (int)$s4->fetchColumn();
-    } catch (Throwable $e) {}
-
-    try {
-        $s5 = $pdo->prepare("SELECT COUNT(DISTINCT c.id) FROM casos c
-            LEFT JOIN caso_pauta_riesgo pr ON pr.caso_id = c.id AND pr.completada_por IS NOT NULL
-            WHERE c.colegio_id = ? AND c.estado NOT IN('cerrado','archivado','borrador')
-            AND pr.id IS NULL");
-        $s5->execute([$cid]);
-        $kpi['sin_pauta_riesgo'] = (int)$s5->fetchColumn();
-    } catch (Throwable $e) {}
-
-} catch (Throwable $e) {}
+    $dt = DateTime::createFromFormat('Y-m-d', $value);
+    return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
+}
 
 // ── Filtro de fecha (afecta sólo la tabla, no los KPIs) ─────────────────────
-$filtDesde = clean((string)($_GET['desde'] ?? ''));
-$filtHasta = clean((string)($_GET['hasta'] ?? ''));
+$filtDesde = seg_norm_date((string)($_GET['desde'] ?? ''));
+$filtHasta = seg_norm_date((string)($_GET['hasta'] ?? ''));
 
-$tablaWhere  = 'c.colegio_id = ? AND c.estado NOT IN(\'cerrado\',\'archivado\',\'borrador\')';
-$tablaParams = [$cid];
+$activeWhere = "c.colegio_id = ?
+    AND COALESCE(ec.codigo, c.estado, 'abierto') NOT IN ('cerrado','archivado','borrador')
+    AND c.estado NOT IN ('archivado','borrador')";
+$activeParams = [$cid];
+
+$tablaWhere  = $activeWhere;
+$tablaParams = $activeParams;
+
 if ($filtDesde !== '') {
     $tablaWhere  .= ' AND DATE(c.fecha_ingreso) >= ?';
     $tablaParams[] = $filtDesde;
@@ -81,44 +53,200 @@ if ($filtHasta !== '') {
     $tablaParams[] = $filtHasta;
 }
 
-// ── Casos activos con estado de seguimiento ──────────────────────────────────
+// ── KPIs (siempre sobre todos los casos activos, sin filtro de fecha) ───────
+$kpi = [
+    'total'             => 0,
+    'en_seguimiento'    => 0,
+    'riesgo_alto'       => 0,
+    'alta'              => 0,
+    'sin_plan'          => 0,
+    'revision_vencida'  => 0,
+    'con_sesion_hoy'    => 0,
+    'sin_pauta_riesgo'  => 0,
+    'alertas_pendientes'=> 0,
+];
+
+try {
+    $stmt = $pdo->prepare("
+        SELECT
+            COUNT(*) AS total,
+            SUM(c.prioridad = 'alta') AS alta,
+            SUM((
+                SELECT pr.nivel_final
+                FROM caso_pauta_riesgo pr
+                WHERE pr.caso_id = c.id
+                  AND pr.completada_por IS NOT NULL
+                ORDER BY pr.created_at DESC, pr.id DESC
+                LIMIT 1
+            ) IN ('alto','critico')) AS riesgo_alto,
+            SUM((
+                SELECT COUNT(*)
+                FROM caso_plan_accion pa
+                WHERE pa.caso_id = c.id
+                  AND pa.colegio_id = c.colegio_id
+                  AND pa.vigente = 1
+            ) = 0) AS sin_plan,
+            SUM((
+                SELECT COUNT(*)
+                FROM caso_pauta_riesgo pr2
+                WHERE pr2.caso_id = c.id
+                  AND pr2.completada_por IS NOT NULL
+            ) = 0) AS sin_pauta_riesgo,
+            SUM((
+                SELECT COUNT(*)
+                FROM caso_alertas a
+                WHERE a.caso_id = c.id
+                  AND a.estado = 'pendiente'
+            )) AS alertas_pendientes,
+            SUM(EXISTS(
+                SELECT 1
+                FROM caso_seguimiento_sesion css
+                WHERE css.caso_id = c.id
+                  AND css.colegio_id = c.colegio_id
+                  AND DATE(css.created_at) = CURDATE()
+            )) AS con_sesion_hoy,
+            SUM(
+                (
+                    SELECT MIN(cssf.proxima_revision)
+                    FROM caso_seguimiento_sesion cssf
+                    WHERE cssf.caso_id = c.id
+                      AND cssf.colegio_id = c.colegio_id
+                      AND cssf.proxima_revision >= CURDATE()
+                ) IS NULL
+                AND
+                (
+                    SELECT MAX(cssp.proxima_revision)
+                    FROM caso_seguimiento_sesion cssp
+                    WHERE cssp.caso_id = c.id
+                      AND cssp.colegio_id = c.colegio_id
+                      AND cssp.proxima_revision < CURDATE()
+                      AND cssp.proxima_revision IS NOT NULL
+                ) IS NOT NULL
+            ) AS revision_vencida
+        FROM casos c
+        LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id
+        WHERE {$activeWhere}
+    ");
+    $stmt->execute($activeParams);
+    $row = $stmt->fetch() ?: [];
+
+    $kpi['total']              = (int)($row['total'] ?? 0);
+    $kpi['en_seguimiento']     = $kpi['total'];
+    $kpi['alta']               = (int)($row['alta'] ?? 0);
+    $kpi['riesgo_alto']        = (int)($row['riesgo_alto'] ?? 0);
+    $kpi['sin_plan']           = (int)($row['sin_plan'] ?? 0);
+    $kpi['sin_pauta_riesgo']   = (int)($row['sin_pauta_riesgo'] ?? 0);
+    $kpi['alertas_pendientes'] = (int)($row['alertas_pendientes'] ?? 0);
+    $kpi['con_sesion_hoy']     = (int)($row['con_sesion_hoy'] ?? 0);
+    $kpi['revision_vencida']   = (int)($row['revision_vencida'] ?? 0);
+} catch (Throwable $e) {
+    // La vista no debe bloquearse por un KPI; la tabla principal mantiene el intento de carga.
+}
+
+// ── Casos activos con estado de seguimiento ─────────────────────────────────
 $casos = [];
 try {
-    $s = $pdo->prepare("
-        SELECT c.id, c.numero_caso, c.semaforo, c.prioridad,
-               c.estado, c.updated_at,
-               ec.nombre AS estado_formal, ec.codigo AS estado_codigo,
-               DATEDIFF(NOW(), c.updated_at)        AS dias_sin_mov,
-               (SELECT MAX(css.created_at) FROM caso_seguimiento_sesion css
-                WHERE css.caso_id=c.id) AS ultima_sesion,
-               (SELECT MIN(css.proxima_revision) FROM caso_seguimiento_sesion css
-                WHERE css.caso_id=c.id AND css.proxima_revision>=CURDATE()
-               ) AS proxima_revision,
-               (SELECT MAX(css.proxima_revision) FROM caso_seguimiento_sesion css
-                WHERE css.caso_id=c.id AND css.proxima_revision<CURDATE()
+    $stmt = $pdo->prepare("
+        SELECT
+            c.id,
+            c.numero_caso,
+            c.prioridad,
+            c.estado,
+            c.updated_at,
+            c.fecha_ingreso,
+            ec.nombre AS estado_formal,
+            ec.codigo AS estado_codigo,
+            DATEDIFF(NOW(), COALESCE(c.updated_at, c.fecha_ingreso)) AS dias_sin_mov,
+            (
+                SELECT MAX(css.created_at)
+                FROM caso_seguimiento_sesion css
+                WHERE css.caso_id = c.id
+                  AND css.colegio_id = c.colegio_id
+            ) AS ultima_sesion,
+            (
+                SELECT MIN(css.proxima_revision)
+                FROM caso_seguimiento_sesion css
+                WHERE css.caso_id = c.id
+                  AND css.colegio_id = c.colegio_id
+                  AND css.proxima_revision >= CURDATE()
+            ) AS proxima_revision,
+            (
+                SELECT MAX(css.proxima_revision)
+                FROM caso_seguimiento_sesion css
+                WHERE css.caso_id = c.id
+                  AND css.colegio_id = c.colegio_id
+                  AND css.proxima_revision < CURDATE()
                   AND css.proxima_revision IS NOT NULL
-               ) AS revision_vencida_fecha,
-               (SELECT COUNT(*) FROM caso_plan_accion pa
-                WHERE pa.caso_id=c.id AND pa.vigente=1) AS tiene_plan,
-               (SELECT COUNT(*) FROM caso_alertas a
-                WHERE a.caso_id=c.id AND a.estado='pendiente') AS alertas,
-               (SELECT pr.nivel_final FROM caso_pauta_riesgo pr
-                WHERE pr.caso_id=c.id AND pr.completada_por IS NOT NULL
-                ORDER BY pr.created_at DESC LIMIT 1) AS nivel_riesgo,
-               (SELECT COUNT(*) FROM caso_participantes cp
-                WHERE cp.caso_id=c.id) AS participantes
+            ) AS revision_vencida_fecha,
+            (
+                SELECT COUNT(*)
+                FROM caso_plan_accion pa
+                WHERE pa.caso_id = c.id
+                  AND pa.colegio_id = c.colegio_id
+                  AND pa.vigente = 1
+            ) AS tiene_plan,
+            (
+                SELECT COUNT(*)
+                FROM caso_alertas a
+                WHERE a.caso_id = c.id
+                  AND a.estado = 'pendiente'
+            ) AS alertas,
+            (
+                SELECT pr.nivel_final
+                FROM caso_pauta_riesgo pr
+                WHERE pr.caso_id = c.id
+                  AND pr.completada_por IS NOT NULL
+                ORDER BY pr.created_at DESC, pr.id DESC
+                LIMIT 1
+            ) AS nivel_riesgo,
+            (
+                SELECT COUNT(*)
+                FROM caso_participantes cp
+                WHERE cp.caso_id = c.id
+                  AND cp.colegio_id = c.colegio_id
+            ) AS participantes,
+            CASE
+                WHEN (
+                    SELECT pr.nivel_final
+                    FROM caso_pauta_riesgo pr
+                    WHERE pr.caso_id = c.id
+                      AND pr.completada_por IS NOT NULL
+                    ORDER BY pr.created_at DESC, pr.id DESC
+                    LIMIT 1
+                ) = 'critico' THEN 1
+                WHEN (
+                    SELECT pr.nivel_final
+                    FROM caso_pauta_riesgo pr
+                    WHERE pr.caso_id = c.id
+                      AND pr.completada_por IS NOT NULL
+                    ORDER BY pr.created_at DESC, pr.id DESC
+                    LIMIT 1
+                ) = 'alto' THEN 2
+                WHEN c.prioridad = 'alta' THEN 3
+                WHEN (
+                    SELECT MAX(css.proxima_revision)
+                    FROM caso_seguimiento_sesion css
+                    WHERE css.caso_id = c.id
+                      AND css.colegio_id = c.colegio_id
+                      AND css.proxima_revision < CURDATE()
+                      AND css.proxima_revision IS NOT NULL
+                ) IS NOT NULL THEN 4
+                ELSE 9
+            END AS orden_riesgo
         FROM casos c
-        LEFT JOIN estado_caso ec ON ec.id=c.estado_caso_id
+        LEFT JOIN estado_caso ec ON ec.id = c.estado_caso_id
         WHERE {$tablaWhere}
         ORDER BY
-            FIELD(c.semaforo,'negro','rojo','amarillo','verde') ASC,
+            orden_riesgo ASC,
             FIELD(c.prioridad,'alta','media','baja') ASC,
-            c.updated_at ASC
+            COALESCE(c.updated_at, c.fecha_ingreso) ASC
         LIMIT 100
     ");
-    $s->execute($tablaParams);
-    $casos = $s->fetchAll();
-} catch (Throwable $e) {}
+    $stmt->execute($tablaParams);
+    $casos = $stmt->fetchAll();
+} catch (Throwable $e) {
+    $casos = [];
+}
 
 // ── Presentación ─────────────────────────────────────────────────────────────
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
