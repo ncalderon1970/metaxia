@@ -147,7 +147,7 @@ $navGroups[] = [
         ],
         ver_tab_visible($pdo, 'participantes') ? [
             'tab' => 'participantes',
-            'label' => 'Participantes',
+            'label' => 'Intervinientes',
             'icon' => 'bi-people-fill',
             'badge' => $totalParticipantes > 0 ? ver_badge_html((string)$totalParticipantes, 'soft') : '',
         ] : null,

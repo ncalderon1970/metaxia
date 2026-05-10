@@ -25,132 +25,12 @@ $puedeOperarParticipantes = Auth::canOperate()
     || Auth::can('crear_denuncia')
     || Auth::can('gestionar_comunidad');
 ?>
-<?php require __DIR__ . '/bloque_contexto_familiar.php'; ?>
 
     <section class="exp-card">
-        <div class="exp-title">Vincular desde comunidad educativa</div>
-
-        <div class="exp-help">
-            Usa esta opción cuando la persona ya exista en la base institucional de alumnos,
-            apoderados, docentes o asistentes. El sistema traerá su RUN y nombre desde comunidad educativa
-            y evitará doble digitación del expediente.
-        </div>
-
-        <div class="exp-card-actions">
-            <a class="exp-link green" href="<?= APP_URL ?>/modules/denuncias/vincular_comunidad.php?caso_id=<?= (int)$casoId ?>">
-                <i class="bi bi-person-plus"></i>
-                Vincular comunidad educativa
-            </a>
-
-            <a class="exp-link" href="<?= APP_URL ?>/modules/comunidad/index.php">
-                <i class="bi bi-people"></i>
-                Revisar comunidad educativa
-            </a>
-
-            <a class="exp-link warn" href="<?= APP_URL ?>/modules/importar/pendientes.php">
-                <i class="bi bi-exclamation-triangle"></i>
-                Pendientes de importación
-            </a>
-        </div>
-    </section>
-
-    <section class="exp-card" id="seccionAgregarParticipante">
-        <div class="exp-title">Agregar participante</div>
-
-        <div class="exp-help">
-            Busca por RUN o nombre en la base institucional.
-            Si la persona no aparece, selecciona <strong>Externo / no vinculado</strong> e ingrésala manualmente.
-        </div>
-
-        <!-- ── Buscador ── -->
-        <div class="vp-search-bar">
-            <select class="exp-control vp-tipo" id="vpTipo" style="width:160px;flex-shrink:0;">
-                <option value="alumno">Alumno/a</option>
-                <option value="apoderado">Apoderado/a</option>
-                <option value="funcionario">Docente / Asist.</option>
-                <option value="todos">Todos</option>
-                <option value="externo">Externo (manual)</option>
-            </select>
-            <div style="position:relative;flex:1;">
-                <input class="exp-control" type="text" id="vpBusqueda"
-                       placeholder="Buscar por RUN o nombre…" autocomplete="off">
-                <div id="vpResultados" class="vp-results" style="display:none;"></div>
-            </div>
-            <div id="vpSpinner" style="display:none;font-size:.8rem;color:#888;">
-                <i class="bi bi-hourglass-split"></i>
-            </div>
-        </div>
-
-        <!-- ── Formulario (se llena automáticamente al seleccionar) ── -->
-        <form method="post" id="vpForm" style="margin-top:1.1rem;">
-            <?= CSRF::field() ?>
-            <input type="hidden" name="_accion"       value="agregar_participante">
-            <input type="hidden" name="persona_id"    id="vpPersonaId"   value="">
-            <input type="hidden" name="tipo_persona"  id="vpTipoPersona" value="alumno">
-
-            <div class="exp-grid-3">
-                <div class="exp-field-full" style="grid-column:1/-1;">
-                    <label class="exp-label">Nombre</label>
-                    <input class="exp-control" type="text" name="nombre_referencial"
-                           id="vpNombre" required placeholder="Se completa al seleccionar o ingresar manualmente">
-                </div>
-
-                <div>
-                    <label class="exp-label">RUN</label>
-                    <input class="exp-control" type="text" name="run"
-                           id="vpRun" placeholder="0-0">
-                </div>
-
-                <div>
-                    <label class="exp-label">Rol en el caso</label>
-                    <select class="exp-control" name="rol_en_caso" id="vpRol">
-                        <?php foreach ($rolesCaso as $valorRol => $textoRol): ?>
-                            <option value="<?= e($valorRol) ?>"><?= e($textoRol) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="exp-label">Observación</label>
-                    <input class="exp-control" type="text" name="observacion" id="vpObservacion">
-                </div>
-
-                <div>
-                    <label class="exp-label">Reserva identidad</label>
-                    <label style="display:flex;align-items:center;gap:.4rem;margin-top:.5rem;font-size:.85rem;">
-                        <input type="checkbox" name="solicita_reserva_identidad" value="1" id="vpReserva">
-                        Solicita reserva
-                    </label>
-                </div>
-            </div>
-
-            <div style="margin-top:.85rem;">
-                <label class="exp-label">Observación de reserva</label>
-                <input class="exp-control" type="text" name="observacion_reserva" id="vpObsReserva">
-            </div>
-
-            <div id="vpFuenteBadge" style="display:none;margin-top:.75rem;">
-                <span class="exp-badge ok" id="vpFuenteTexto"></span>
-                <button type="button" id="vpLimpiar" style="margin-left:.5rem;background:none;
-                    border:none;color:#c0392b;font-size:.8rem;cursor:pointer;">
-                    <i class="bi bi-x-circle"></i> Limpiar selección
-                </button>
-            </div>
-
-            <div style="margin-top:1rem;">
-                <button class="exp-submit green" type="submit">
-                    <i class="bi bi-person-plus"></i>
-                    Agregar participante
-                </button>
-            </div>
-        </form>
-    </section>
-
-    <section class="exp-card">
-        <div class="exp-title">Participantes registrados</div>
+        <div class="exp-title">Intervinientes</div>
 
         <?php if (!$participantes): ?>
-            <div class="exp-empty">No hay participantes registrados.</div>
+            <div class="exp-empty">No hay intervinientes registrados.</div>
         <?php else: ?>
             <?php foreach ($participantes as $p): ?>
                 <?php
@@ -189,7 +69,7 @@ $puedeOperarParticipantes = Auth::canOperate()
                                 </summary>
 
                                 <div class="exp-help" style="margin-top:.65rem;">
-                                    Permite corregir la calidad del participante cuando la investigación entrega nuevos antecedentes.
+                                    Permite corregir la calidad del interviniente cuando la investigación entrega nuevos antecedentes.
                                 </div>
 
                                 <form method="post" action="<?= APP_URL ?>/modules/denuncias/reclasificar_participante.php" style="margin-top:.75rem;">
@@ -239,8 +119,100 @@ $puedeOperarParticipantes = Auth::canOperate()
         <?php endif; ?>
     </section>
 
+    <section class="exp-card" id="seccionAgregarParticipante">
+        <div class="exp-title">Agregar intervinientes</div>
+
+        <div class="exp-help">
+            Busca por RUN o nombre en la base institucional de alumnos, apoderados, docentes o asistentes.
+            Si la persona no aparece, selecciona <strong>Externo / no vinculado</strong> e ingrésala manualmente.
+        </div>
+
+        <!-- ── Buscador ── -->
+        <div class="vp-search-bar">
+            <select class="exp-control vp-tipo" id="vpTipo" style="width:160px;flex-shrink:0;">
+                <option value="alumno">Alumno/a</option>
+                <option value="apoderado">Apoderado/a</option>
+                <option value="funcionario">Docente / Asist.</option>
+                <option value="todos">Todos</option>
+                <option value="externo">Externo (manual)</option>
+            </select>
+            <div style="position:relative;flex:1;">
+                <input class="exp-control" type="text" id="vpBusqueda"
+                       placeholder="Buscar por RUN o nombre…" autocomplete="off">
+                <div id="vpResultados" class="vp-results" style="display:none;"></div>
+            </div>
+            <div id="vpSpinner" style="display:none;font-size:.8rem;color:#888;">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+        </div>
+
+        <!-- ── Formulario (se llena automáticamente al seleccionar) ── -->
+        <form method="post" id="vpForm" style="margin-top:1.1rem;">
+            <?= CSRF::field() ?>
+            <input type="hidden" name="_accion"       value="agregar_participante">
+            <input type="hidden" name="persona_id"    id="vpPersonaId"   value="">
+            <input type="hidden" name="tipo_persona"  id="vpTipoPersona" value="alumno">
+
+            <div class="exp-grid-3">
+                <div class="exp-field-full" style="grid-column:1/-1;">
+                    <label class="exp-label">Nombre</label>
+                    <input class="exp-control" type="text" name="nombre_referencial"
+                           id="vpNombre" required placeholder="Se completa al seleccionar o ingresar manualmente">
+                </div>
+
+                <div>
+                    <label class="exp-label">RUN</label>
+                    <input class="exp-control" type="text" name="run"
+                           id="vpRun" placeholder="0-0">
+                </div>
+
+                <div>
+                    <label class="exp-label">Calidad en el caso</label>
+                    <select class="exp-control" name="rol_en_caso" id="vpRol">
+                        <?php foreach ($rolesCaso as $valorRol => $textoRol): ?>
+                            <option value="<?= e($valorRol) ?>"><?= e($textoRol) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="exp-label">Observación</label>
+                    <input class="exp-control" type="text" name="observacion" id="vpObservacion">
+                </div>
+
+                <div>
+                    <label class="exp-label">Reserva identidad</label>
+                    <label style="display:flex;align-items:center;gap:.4rem;margin-top:.5rem;font-size:.85rem;">
+                        <input type="checkbox" name="solicita_reserva_identidad" value="1" id="vpReserva">
+                        Solicita reserva
+                    </label>
+                </div>
+            </div>
+
+            <div style="margin-top:.85rem;">
+                <label class="exp-label">Observación de reserva</label>
+                <input class="exp-control" type="text" name="observacion_reserva" id="vpObsReserva">
+            </div>
+
+            <div id="vpFuenteBadge" style="display:none;margin-top:.75rem;">
+                <span class="exp-badge ok" id="vpFuenteTexto"></span>
+                <button type="button" id="vpLimpiar" style="margin-left:.5rem;background:none;
+                    border:none;color:#c0392b;font-size:.8rem;cursor:pointer;">
+                    <i class="bi bi-x-circle"></i> Limpiar selección
+                </button>
+            </div>
+
+            <div style="margin-top:1rem;">
+                <button class="exp-submit green" type="submit">
+                    <i class="bi bi-person-plus"></i>
+                    Agregar interviniente
+                </button>
+            </div>
+        </form>
+    </section>
+
 <style>
-/* ── Buscador de participantes en ver.php ── */
+/* ── Buscador de intervinientes en ver.php ── */
 .vp-search-bar    { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
 .vp-results       { position:absolute; top:100%; left:0; right:0; z-index:200;
                     background:#fff; border:1px solid #c8d6f0; border-radius:8px;
