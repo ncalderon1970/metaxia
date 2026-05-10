@@ -55,14 +55,14 @@ function me_email(?string $v): string
 
 function me_col(PDO $pdo, string $col): bool
 {
-    static $cache = [];
-    if (isset($cache[$col])) return $cache[$col];
-    try {
-        $s = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='colegios' AND COLUMN_NAME=?");
-        $s->execute([$col]);
-        return $cache[$col] = (bool)$s->fetchColumn();
-    } catch (Throwable $e) { return $cache[$col] = false; }
+    static $cols = [
+        'id', 'rbd', 'rut_entidad', 'nombre', 'logo_url', 'director_nombre', 'firma_url',
+        'dependencia', 'comuna', 'region', 'direccion', 'telefono', 'email', 'activo',
+        'fecha_vencimiento', 'estado_comercial', 'precio_uf_mensual', 'plan',
+        'contacto_comercial', 'email_comercial', 'telefono_comercial', 'created_at', 'updated_at'
+    ];
+
+    return in_array($col, $cols, true);
 }
 
 // ── POST: guardar datos de contacto ──────────────────────────
@@ -96,14 +96,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $setCols[] = 'email = ?';             $params[] = $email;
         $setCols[] = 'telefono = ?';          $params[] = $telefono;
 
-        if (me_col($pdo, 'contacto_nombre'))   { $setCols[] = 'contacto_nombre = ?';   $params[] = $contactoNombre; }
-        if (me_col($pdo, 'contacto_email'))    { $setCols[] = 'contacto_email = ?';    $params[] = $contactoEmail; }
-        if (me_col($pdo, 'contacto_telefono')) { $setCols[] = 'contacto_telefono = ?'; $params[] = $contactoTelefono; }
-        if (me_col($pdo, 'sostenedor_nombre')) {
-            $sostenedor = me_clean($_POST['sostenedor_nombre'] ?? '');
-            $setCols[] = 'sostenedor_nombre = ?';
-            $params[]  = $sostenedor;
-        }
+        if (me_col($pdo, 'contacto_comercial')) { $setCols[] = 'contacto_comercial = ?'; $params[] = $contactoNombre; }
+        if (me_col($pdo, 'email_comercial')) { $setCols[] = 'email_comercial = ?'; $params[] = $contactoEmail; }
+        if (me_col($pdo, 'telefono_comercial')) { $setCols[] = 'telefono_comercial = ?'; $params[] = $contactoTelefono; }
+        
         if (me_col($pdo, 'dependencia'))       { $setCols[] = 'dependencia = ?';       $params[] = $dependencia; }
 
         $params[] = $colegioId;
@@ -203,12 +199,6 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                 <div class="me-readonly-val"><?= e((string)$col['rut_entidad']) ?></div>
             </div>
             <?php endif; ?>
-            <?php if (!empty($col['sostenedor_nombre'])): ?>
-            <div class="me-readonly">
-                <div class="me-readonly-lbl">Sostenedor</div>
-                <div class="me-readonly-val"><?= e((string)$col['sostenedor_nombre']) ?></div>
-            </div>
-            <?php endif; ?>
         </div>
 
         <div style="font-size:.75rem;color:#aaa;">
@@ -292,7 +282,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 
                 <hr class="me-section-sep full">
 
-                <?php if (me_col($pdo, 'contacto_nombre')): ?>
+                <?php if (me_col($pdo, 'contacto_comercial')): ?>
                 <div class="full" style="font-size:.8rem;font-weight:700;color:#1a3a5c;margin-bottom:-.4rem;">
                     <i class="bi bi-person-lines-fill"></i> Contacto administrativo
                 </div>
@@ -300,25 +290,25 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                 <div>
                     <label class="me-label" for="meContactoNombre">Nombre del contacto</label>
                     <input class="me-control" type="text" id="meContactoNombre" name="contacto_nombre"
-                           value="<?= e((string)($col['contacto_nombre'] ?? '')) ?>"
+                           value="<?= e((string)($col['contacto_comercial'] ?? '')) ?>"
                            placeholder="Secretaría, Jefe UTP, etc.">
                 </div>
                 <?php endif; ?>
 
-                <?php if (me_col($pdo, 'contacto_email')): ?>
+                <?php if (me_col($pdo, 'email_comercial')): ?>
                 <div>
                     <label class="me-label" for="meContactoEmail">Email del contacto</label>
                     <input class="me-control" type="email" id="meContactoEmail" name="contacto_email"
-                           value="<?= e((string)($col['contacto_email'] ?? '')) ?>"
+                           value="<?= e((string)($col['email_comercial'] ?? '')) ?>"
                            placeholder="secretaria@colegio.cl">
                 </div>
                 <?php endif; ?>
 
-                <?php if (me_col($pdo, 'contacto_telefono')): ?>
+                <?php if (me_col($pdo, 'telefono_comercial')): ?>
                 <div>
                     <label class="me-label" for="meContactoTelefono">Teléfono del contacto</label>
                     <input class="me-control" type="text" id="meContactoTelefono" name="contacto_telefono"
-                           value="<?= e((string)($col['contacto_telefono'] ?? '')) ?>"
+                           value="<?= e((string)($col['telefono_comercial'] ?? '')) ?>"
                            placeholder="+56 9 1234 5678">
                 </div>
                 <?php endif; ?>

@@ -27,35 +27,128 @@ $pageSubtitle = 'Administración de establecimientos, planes, vencimientos y lí
 
 function col_table_exists(PDO $pdo, string $table): bool
 {
-    try {
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = ?
-        ");
-        $stmt->execute([$table]);
-        return (int)$stmt->fetchColumn() > 0;
-    } catch (Throwable $e) {
-        return false;
-    }
+    static $schema = [
+        'alumno_apoderado' => ['id', 'alumno_id', 'apoderado_id', 'tipo_relacion', 'parentesco', 'es_titular', 'puede_retirar', 'recibe_notificaciones', 'vive_con_estudiante', 'observacion', 'activo', 'created_at', 'updated_at'],
+        'alumno_condicion_especial' => ['id', 'colegio_id', 'alumno_id', 'tipo_condicion', 'nombre_condicion', 'estado_diagnostico', 'nivel_apoyo', 'tiene_pie', 'tiene_certificado', 'nro_certificado', 'fecha_deteccion', 'fecha_diagnostico', 'fecha_inicio_pie', 'derivado_salud', 'fecha_derivacion', 'destino_derivacion', 'estado_derivacion', 'fecha_respuesta_salud', 'requiere_ajustes', 'descripcion_ajustes', 'ajustes_aplicados', 'observaciones', 'fuente_informacion', 'registrado_por', 'activo', 'created_at', 'updated_at'],
+        'alumnos' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'fecha_nacimiento', 'curso', 'genero', 'direccion', 'telefono', 'email', 'observacion', 'condicion_especial', 'tiene_pie', 'diagnostico_tea', 'nivel_apoyo_tea', 'derivado_salud_tea', 'fecha_derivacion_tea', 'destino_derivacion_tea', 'estado_derivacion_tea', 'tiene_certificado_discapacidad', 'nro_certificado_discapacidad', 'requiere_ajustes_razonables', 'descripcion_ajustes', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'apoderados' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'nombre_cache', 'nombre', 'telefono', 'telefono_secundario', 'email', 'direccion', 'observacion', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'asistentes' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'nombre_cache', 'nombre', 'cargo', 'email', 'telefono', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'aula_segura_causales' => ['id', 'codigo', 'nombre', 'tipo', 'descripcion', 'activo', 'orden', 'created_at', 'updated_at'],
+        'aula_segura_procedimientos' => ['id', 'caso_id', 'aplica', 'causal', 'medida_cautelar_suspension', 'fecha_notificacion_suspension', 'fecha_limite_resolucion', 'fecha_notificacion_resolucion', 'fecha_limite_reconsideracion', 'reconsideracion_presentada', 'fecha_reconsideracion', 'estado', 'observaciones', 'created_at', 'updated_at'],
+        'caso_alertas' => ['id', 'caso_id', 'seguimiento_id', 'plan_id', 'tipo', 'mensaje', 'prioridad', 'estado', 'fecha_alerta', 'atendida_por', 'fecha_atendida', 'resuelta_por', 'resuelta_at', 'created_at', 'updated_at'],
+        'caso_analisis_ia' => ['id', 'caso_id', 'colegio_id', 'usuario_id', 'reglamento_id', 'modelo_usado', 'tokens_usados', 'analisis_texto', 'medidas_json', 'gravedad_ia', 'alerta_normativa', 'created_at'],
+        'caso_aula_segura' => ['id', 'caso_id', 'colegio_id', 'posible_aula_segura', 'causal_agresion_sexual', 'causal_agresion_fisica_lesiones', 'causal_armas', 'causal_artefactos_incendiarios', 'causal_infraestructura_esencial', 'causal_grave_reglamento', 'descripcion_hecho', 'fuente_informacion', 'evidencia_inicial', 'falta_reglamento', 'fundamento_proporcionalidad', 'estado', 'decision_director', 'fecha_evaluacion_directiva', 'evaluado_por', 'fecha_inicio_procedimiento', 'iniciado_por', 'comunicacion_apoderado_at', 'medio_comunicacion_apoderado', 'observacion_comunicacion_apoderado', 'suspension_cautelar', 'fecha_notificacion_suspension', 'fecha_limite_resolucion', 'fundamento_suspension', 'descargos_recibidos', 'fecha_descargos', 'observacion_descargos', 'resolucion', 'fecha_resolucion', 'fecha_notificacion_resolucion', 'fundamento_resolucion', 'reconsideracion_presentada', 'fecha_reconsideracion', 'fecha_limite_reconsideracion', 'fecha_resolucion_reconsideracion', 'resultado_reconsideracion', 'fundamento_reconsideracion', 'comunicacion_supereduc', 'fecha_comunicacion_supereduc', 'medio_comunicacion_supereduc', 'observacion_supereduc', 'observaciones', 'creado_por', 'created_at', 'updated_at'],
+        'caso_aula_segura_historial' => ['id', 'caso_id', 'caso_aula_segura_id', 'colegio_id', 'accion', 'estado_anterior', 'estado_nuevo', 'detalle', 'usuario_id', 'created_at'],
+        'caso_cierre' => ['id', 'colegio_id', 'caso_id', 'fecha_cierre', 'tipo_cierre', 'fundamento', 'medidas_finales', 'acuerdos', 'derivaciones', 'observaciones', 'estado_cierre', 'cerrado_por', 'anulado_por', 'anulado_at', 'motivo_anulacion', 'created_at', 'updated_at'],
+        'caso_clasificacion_normativa' => ['id', 'colegio_id', 'caso_id', 'area_mineduc', 'ambito_mineduc', 'tipo_conducta', 'categoria_convivencia', 'conducta_principal', 'gravedad', 'reiteracion', 'involucra_adulto', 'discriminacion', 'ciberacoso', 'acoso_escolar', 'violencia_fisica', 'violencia_psicologica', 'violencia_sexual', 'maltrato_adulto_estudiante', 'posible_aula_segura', 'causal_aula_segura', 'fundamento_aula_segura', 'requiere_denuncia', 'entidad_derivacion', 'plazo_revision', 'observaciones_normativas', 'creado_por', 'created_at', 'updated_at', 'ley21809_flags', 'rex782_flags', 'contexto_normativo_flags'],
+        'caso_correlativos' => ['anio', 'ultimo_correlativo', 'created_at', 'updated_at'],
+        'caso_declaraciones' => ['id', 'caso_id', 'participante_id', 'tipo_declarante', 'nombre_declarante', 'run_declarante', 'calidad_procesal', 'fecha_declaracion', 'texto_declaracion', 'requiere_reanalisis_ia', 'observaciones', 'tomada_por', 'created_at'],
+        'caso_evidencias' => ['id', 'caso_id', 'tipo', 'nombre_archivo', 'ruta', 'descripcion', 'mime_type', 'tamano_bytes', 'subido_por', 'created_at'],
+        'caso_gestion_ejecutiva' => ['id', 'colegio_id', 'caso_id', 'titulo', 'descripcion', 'responsable_nombre', 'responsable_rol', 'prioridad', 'estado', 'fecha_compromiso', 'fecha_cumplimiento', 'creado_por', 'cerrado_por', 'created_at', 'updated_at'],
+        'caso_historial' => ['id', 'caso_id', 'tipo_evento', 'titulo', 'detalle', 'user_id', 'created_at'],
+        'caso_hitos' => ['id', 'caso_id', 'colegio_id', 'codigo', 'nombre', 'user_id', 'created_at'],
+        'caso_marcadores_normativos' => ['id', 'caso_id', 'colegio_id', 'marcador_codigo', 'user_id', 'created_at'],
+        'caso_participantes' => ['id', 'caso_id', 'tipo_persona', 'persona_id', 'nombre_referencial', 'run', 'identidad_confirmada', 'fecha_identificacion', 'identificado_por', 'rol_en_caso', 'solicita_reserva_identidad', 'observacion_reserva', 'observacion', 'observacion_identificacion', 'created_at'],
+        'caso_pauta_riesgo' => ['id', 'caso_id', 'alumno_id', 'nombre_alumno', 'rol_en_caso', 'numero_aplicacion', 'd1_frecuencia', 'd1_tipo_violencia', 'd1_lugar', 'd1_medios', 'puntaje_d1', 'd2_edad', 'd2_condicion', 'd2_red_familiar', 'd2_victimizacion', 'puntaje_d2', 'd3_quien_agresor', 'd3_actitud', 'd3_antecedentes', 'puntaje_d3', 'd4_visibilidad', 'd4_riesgo_repeticion', 'd4_familia_agresor', 'd4_derivacion', 'puntaje_d4', 'esc_menor_8', 'esc_agresor_funcionario', 'esc_violencia_sexual', 'esc_amenazas_armas', 'esc_tea_sin_red', 'esc_reincidencia', 'puntaje_total', 'nivel_calculado', 'nivel_final', 'ajuste_profesional', 'justificacion_ajuste', 'derivado', 'fecha_derivacion', 'entidad_derivacion', 'motivo_reaplicacion', 'observacion', 'firmado', 'firma_hash', 'firma_timestamp', 'firmado_por_id', 'firmado_por_nombre', 'firma_ip', 'completada_por', 'created_at'],
+        'caso_plan_accion' => ['id', 'caso_id', 'colegio_id', 'participante_id', 'plan_accion', 'medidas_preventivas', 'version', 'vigente', 'motivo_version', 'estado_plan', 'creado_por', 'created_at', 'updated_at'],
+        'caso_plan_intervencion' => ['id', 'caso_id', 'colegio_id', 'participante_id', 'tipo_medida', 'seguimiento_id', 'titulo', 'descripcion', 'responsable', 'fecha_compromiso', 'responsable_id', 'fecha_inicio', 'fecha_vencimiento', 'estado', 'observacion_cumplimiento', 'prioridad', 'created_at', 'updated_at'],
+        'caso_protocolo_tea' => ['id', 'caso_id', 'colegio_id', 'alumno_condicion_id', 'deteccion_registrada', 'fecha_deteccion', 'comunicacion_familia', 'fecha_comunicacion_familia', 'derivacion_salud', 'fecha_derivacion', 'establecimiento_salud', 'profesional_receptor', 'coordinacion_pie', 'ajustes_metodologicos', 'seguimiento_establecido', 'fecha_proximo_seguimiento', 'respuesta_salud_recibida', 'fecha_respuesta_salud', 'diagnostico_confirmado', 'estado_protocolo', 'observaciones', 'completado_por', 'created_at', 'updated_at'],
+        'caso_seguimiento' => ['id', 'colegio_id', 'caso_id', 'fecha_apertura', 'objetivo_general', 'estado', 'responsable_general_id', 'fecha_cierre', 'observacion_avance', 'proxima_revision', 'estado_seguimiento', 'medidas_preventivas', 'cumplimiento', 'comunicacion_apoderado_modalidad', 'comunicacion_apoderado_fecha', 'notas_comunicacion', 'actualizado_por', 'created_at', 'updated_at'],
+        'caso_seguimiento_avances' => ['id', 'plan_id', 'descripcion', 'porcentaje_avance', 'registrado_por', 'created_at'],
+        'caso_seguimiento_participantes' => ['id', 'colegio_id', 'caso_id', 'seguimiento_id', 'participante_id', 'tipo_participante', 'nombre_participante', 'run_participante', 'condicion', 'plan_accion', 'estado', 'created_at', 'updated_at'],
+        'caso_seguimiento_sesion' => ['id', 'caso_id', 'colegio_id', 'participante_id', 'plan_accion_id', 'observacion_avance', 'medidas_sesion', 'estado_caso', 'cumplimiento_plan', 'proxima_revision', 'comunicacion_apoderado', 'fecha_comunicacion_apoderado', 'notas_comunicacion', 'registrado_por', 'created_at', 'updated_at'],
+        'casos' => ['id', 'colegio_id', 'numero_caso', 'codigo', 'anio_caso', 'correlativo_anual', 'numero_caso_base', 'numero_caso_dv', 'fecha_ingreso', 'denunciante_nombre', 'es_anonimo', 'relato', 'contexto', 'involucra_moviles', 'estado', 'estado_caso_id', 'falta_id', 'denuncia_aspecto_id', 'requiere_reanalisis_ia', 'semaforo', 'prioridad', 'marco_legal', 'involucra_nna_tea', 'interes_superior_aplicado', 'interés_superior_aplicado', 'autonomia_progresiva_considerada', 'requiere_coordinacion_senape', 'requiere_coordinacion_salud', 'fecha_coordinacion_senape', 'observacion_coordinacion', 'creado_por', 'created_at', 'updated_at', 'denunciante_run', 'lugar_hechos', 'fecha_hechos', 'clasificacion_ia', 'denunciante', 'denunciante_persona_id', 'fecha_hora_incidente', 'canal_ingreso', 'descripcion', 'resumen_ia', 'recomendacion_ia', 'posible_aula_segura', 'aula_segura_estado', 'aula_segura_marcado_por', 'aula_segura_marcado_at', 'aula_segura_causales_preliminares', 'aula_segura_observacion_preliminar', 'ley21809_flags', 'rex782_flags', 'denuncia_normativa_observacion', 'comunicacion_apoderado_estado', 'comunicacion_apoderado_realizada', 'comunicacion_apoderado_modalidad', 'comunicacion_apoderado_fecha', 'comunicacion_apoderado_notas', 'comunicacion_apoderado_registrado_por', 'comunicacion_apoderado_registrado_at'],
+        'catalogo_condicion_especial' => ['id', 'codigo', 'nombre', 'categoria', 'ley_base', 'requiere_pie', 'activo'],
+        'checklist_preproduccion' => ['id', 'codigo', 'categoria', 'item', 'detalle', 'prioridad', 'estado', 'responsable', 'observacion', 'revisado_por', 'revisado_at', 'orden', 'created_at', 'updated_at'],
+        'colegio_modulos' => ['id', 'colegio_id', 'modulo_codigo', 'activo', 'fecha_activacion', 'fecha_expiracion', 'plan', 'created_at', 'updated_at'],
+        'colegio_reglamentos' => ['id', 'colegio_id', 'nombre_original', 'ruta_archivo', 'texto_contenido', 'caracteres', 'activo', 'subido_por', 'created_at', 'updated_at'],
+        'colegio_suscripciones' => ['id', 'colegio_id', 'modulo_codigo', 'plan', 'precio', 'estado', 'fecha_inicio', 'fecha_fin', 'created_at', 'updated_at'],
+        'colegios' => ['id', 'rbd', 'rut_entidad', 'nombre', 'logo_url', 'director_nombre', 'firma_url', 'dependencia', 'comuna', 'region', 'direccion', 'telefono', 'email', 'activo', 'fecha_vencimiento', 'estado_comercial', 'precio_uf_mensual', 'plan', 'contacto_comercial', 'email_comercial', 'telefono_comercial', 'created_at', 'updated_at'],
+        'comunidad_importacion_pendientes' => ['id', 'colegio_id', 'tipo', 'fila_csv', 'run_original', 'motivo', 'datos_json', 'estado', 'corregido_run', 'corregido_por', 'corregido_at', 'observacion', 'created_at', 'updated_at'],
+        'denuncia_areas' => ['id', 'codigo', 'nombre', 'descripcion', 'activo', 'created_at'],
+        'denuncia_aspectos' => ['id', 'area_id', 'codigo', 'nombre', 'descripcion', 'activo', 'created_at'],
+        'docentes' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'nombre_cache', 'nombre', 'email', 'telefono', 'cargo', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'estado_caso' => ['id', 'codigo', 'nombre', 'orden_visual', 'activo'],
+        'faltas' => ['id', 'colegio_id', 'codigo', 'nombre', 'gravedad', 'descripcion', 'activo', 'created_at', 'updated_at'],
+        'ia_consumo' => ['id', 'colegio_id', 'usuario_id', 'caso_id', 'tipo_analisis', 'tokens_usados', 'costo_estimado', 'created_at'],
+        'importacion_pendientes' => ['id', 'colegio_id', 'tipo', 'fila', 'run', 'motivo', 'datos_json', 'estado', 'creado_por', 'created_at', 'updated_at'],
+        'logs_sistema' => ['id', 'colegio_id', 'usuario_id', 'modulo', 'accion', 'entidad', 'entidad_id', 'descripcion', 'ip', 'user_agent', 'created_at'],
+        'marcadores_normativos' => ['id', 'codigo', 'nombre', 'grupo', 'descripcion', 'orden', 'activo'],
+        'modulos_catalogo' => ['id', 'codigo', 'nombre', 'descripcion', 'es_premium', 'activo', 'created_at'],
+        'password_resets' => ['id', 'email', 'token', 'expires_at', 'used', 'created_at'],
+        'permisos' => ['id', 'codigo', 'nombre', 'modulo', 'grupo', 'descripcion', 'activo'],
+        'pruebas_integrales' => ['id', 'codigo', 'area', 'prueba', 'descripcion', 'prioridad', 'resultado', 'observacion', 'responsable', 'fecha_revision', 'revisado_por', 'activo', 'created_at', 'updated_at'],
+        'rol_permiso' => ['id', 'rol_id', 'permiso_id'],
+        'rol_permisos' => ['id', 'rol_id', 'permiso_id', 'permitido', 'created_at', 'updated_at'],
+        'roles' => ['id', 'codigo', 'nombre', 'descripcion', 'activo'],
+        'sistema_config' => ['id', 'clave', 'valor', 'tipo', 'descripcion', 'scope', 'actualizado_por', 'updated_at'],
+        'usuarios' => ['id', 'colegio_id', 'rol_id', 'run', 'nombre', 'email', 'password_hash', 'activo', 'ultimo_acceso', 'created_at', 'updated_at'],
+];
+
+    return array_key_exists($table, $schema);
 }
 
 function col_column_exists(PDO $pdo, string $table, string $column): bool
 {
-    try {
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = ?
-              AND COLUMN_NAME = ?
-        ");
-        $stmt->execute([$table, $column]);
-        return (int)$stmt->fetchColumn() > 0;
-    } catch (Throwable $e) {
-        return false;
-    }
+    static $schema = [
+        'alumno_apoderado' => ['id', 'alumno_id', 'apoderado_id', 'tipo_relacion', 'parentesco', 'es_titular', 'puede_retirar', 'recibe_notificaciones', 'vive_con_estudiante', 'observacion', 'activo', 'created_at', 'updated_at'],
+        'alumno_condicion_especial' => ['id', 'colegio_id', 'alumno_id', 'tipo_condicion', 'nombre_condicion', 'estado_diagnostico', 'nivel_apoyo', 'tiene_pie', 'tiene_certificado', 'nro_certificado', 'fecha_deteccion', 'fecha_diagnostico', 'fecha_inicio_pie', 'derivado_salud', 'fecha_derivacion', 'destino_derivacion', 'estado_derivacion', 'fecha_respuesta_salud', 'requiere_ajustes', 'descripcion_ajustes', 'ajustes_aplicados', 'observaciones', 'fuente_informacion', 'registrado_por', 'activo', 'created_at', 'updated_at'],
+        'alumnos' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'fecha_nacimiento', 'curso', 'genero', 'direccion', 'telefono', 'email', 'observacion', 'condicion_especial', 'tiene_pie', 'diagnostico_tea', 'nivel_apoyo_tea', 'derivado_salud_tea', 'fecha_derivacion_tea', 'destino_derivacion_tea', 'estado_derivacion_tea', 'tiene_certificado_discapacidad', 'nro_certificado_discapacidad', 'requiere_ajustes_razonables', 'descripcion_ajustes', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'apoderados' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'nombre_cache', 'nombre', 'telefono', 'telefono_secundario', 'email', 'direccion', 'observacion', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'asistentes' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'nombre_cache', 'nombre', 'cargo', 'email', 'telefono', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'aula_segura_causales' => ['id', 'codigo', 'nombre', 'tipo', 'descripcion', 'activo', 'orden', 'created_at', 'updated_at'],
+        'aula_segura_procedimientos' => ['id', 'caso_id', 'aplica', 'causal', 'medida_cautelar_suspension', 'fecha_notificacion_suspension', 'fecha_limite_resolucion', 'fecha_notificacion_resolucion', 'fecha_limite_reconsideracion', 'reconsideracion_presentada', 'fecha_reconsideracion', 'estado', 'observaciones', 'created_at', 'updated_at'],
+        'caso_alertas' => ['id', 'caso_id', 'seguimiento_id', 'plan_id', 'tipo', 'mensaje', 'prioridad', 'estado', 'fecha_alerta', 'atendida_por', 'fecha_atendida', 'resuelta_por', 'resuelta_at', 'created_at', 'updated_at'],
+        'caso_analisis_ia' => ['id', 'caso_id', 'colegio_id', 'usuario_id', 'reglamento_id', 'modelo_usado', 'tokens_usados', 'analisis_texto', 'medidas_json', 'gravedad_ia', 'alerta_normativa', 'created_at'],
+        'caso_aula_segura' => ['id', 'caso_id', 'colegio_id', 'posible_aula_segura', 'causal_agresion_sexual', 'causal_agresion_fisica_lesiones', 'causal_armas', 'causal_artefactos_incendiarios', 'causal_infraestructura_esencial', 'causal_grave_reglamento', 'descripcion_hecho', 'fuente_informacion', 'evidencia_inicial', 'falta_reglamento', 'fundamento_proporcionalidad', 'estado', 'decision_director', 'fecha_evaluacion_directiva', 'evaluado_por', 'fecha_inicio_procedimiento', 'iniciado_por', 'comunicacion_apoderado_at', 'medio_comunicacion_apoderado', 'observacion_comunicacion_apoderado', 'suspension_cautelar', 'fecha_notificacion_suspension', 'fecha_limite_resolucion', 'fundamento_suspension', 'descargos_recibidos', 'fecha_descargos', 'observacion_descargos', 'resolucion', 'fecha_resolucion', 'fecha_notificacion_resolucion', 'fundamento_resolucion', 'reconsideracion_presentada', 'fecha_reconsideracion', 'fecha_limite_reconsideracion', 'fecha_resolucion_reconsideracion', 'resultado_reconsideracion', 'fundamento_reconsideracion', 'comunicacion_supereduc', 'fecha_comunicacion_supereduc', 'medio_comunicacion_supereduc', 'observacion_supereduc', 'observaciones', 'creado_por', 'created_at', 'updated_at'],
+        'caso_aula_segura_historial' => ['id', 'caso_id', 'caso_aula_segura_id', 'colegio_id', 'accion', 'estado_anterior', 'estado_nuevo', 'detalle', 'usuario_id', 'created_at'],
+        'caso_cierre' => ['id', 'colegio_id', 'caso_id', 'fecha_cierre', 'tipo_cierre', 'fundamento', 'medidas_finales', 'acuerdos', 'derivaciones', 'observaciones', 'estado_cierre', 'cerrado_por', 'anulado_por', 'anulado_at', 'motivo_anulacion', 'created_at', 'updated_at'],
+        'caso_clasificacion_normativa' => ['id', 'colegio_id', 'caso_id', 'area_mineduc', 'ambito_mineduc', 'tipo_conducta', 'categoria_convivencia', 'conducta_principal', 'gravedad', 'reiteracion', 'involucra_adulto', 'discriminacion', 'ciberacoso', 'acoso_escolar', 'violencia_fisica', 'violencia_psicologica', 'violencia_sexual', 'maltrato_adulto_estudiante', 'posible_aula_segura', 'causal_aula_segura', 'fundamento_aula_segura', 'requiere_denuncia', 'entidad_derivacion', 'plazo_revision', 'observaciones_normativas', 'creado_por', 'created_at', 'updated_at', 'ley21809_flags', 'rex782_flags', 'contexto_normativo_flags'],
+        'caso_correlativos' => ['anio', 'ultimo_correlativo', 'created_at', 'updated_at'],
+        'caso_declaraciones' => ['id', 'caso_id', 'participante_id', 'tipo_declarante', 'nombre_declarante', 'run_declarante', 'calidad_procesal', 'fecha_declaracion', 'texto_declaracion', 'requiere_reanalisis_ia', 'observaciones', 'tomada_por', 'created_at'],
+        'caso_evidencias' => ['id', 'caso_id', 'tipo', 'nombre_archivo', 'ruta', 'descripcion', 'mime_type', 'tamano_bytes', 'subido_por', 'created_at'],
+        'caso_gestion_ejecutiva' => ['id', 'colegio_id', 'caso_id', 'titulo', 'descripcion', 'responsable_nombre', 'responsable_rol', 'prioridad', 'estado', 'fecha_compromiso', 'fecha_cumplimiento', 'creado_por', 'cerrado_por', 'created_at', 'updated_at'],
+        'caso_historial' => ['id', 'caso_id', 'tipo_evento', 'titulo', 'detalle', 'user_id', 'created_at'],
+        'caso_hitos' => ['id', 'caso_id', 'colegio_id', 'codigo', 'nombre', 'user_id', 'created_at'],
+        'caso_marcadores_normativos' => ['id', 'caso_id', 'colegio_id', 'marcador_codigo', 'user_id', 'created_at'],
+        'caso_participantes' => ['id', 'caso_id', 'tipo_persona', 'persona_id', 'nombre_referencial', 'run', 'identidad_confirmada', 'fecha_identificacion', 'identificado_por', 'rol_en_caso', 'solicita_reserva_identidad', 'observacion_reserva', 'observacion', 'observacion_identificacion', 'created_at'],
+        'caso_pauta_riesgo' => ['id', 'caso_id', 'alumno_id', 'nombre_alumno', 'rol_en_caso', 'numero_aplicacion', 'd1_frecuencia', 'd1_tipo_violencia', 'd1_lugar', 'd1_medios', 'puntaje_d1', 'd2_edad', 'd2_condicion', 'd2_red_familiar', 'd2_victimizacion', 'puntaje_d2', 'd3_quien_agresor', 'd3_actitud', 'd3_antecedentes', 'puntaje_d3', 'd4_visibilidad', 'd4_riesgo_repeticion', 'd4_familia_agresor', 'd4_derivacion', 'puntaje_d4', 'esc_menor_8', 'esc_agresor_funcionario', 'esc_violencia_sexual', 'esc_amenazas_armas', 'esc_tea_sin_red', 'esc_reincidencia', 'puntaje_total', 'nivel_calculado', 'nivel_final', 'ajuste_profesional', 'justificacion_ajuste', 'derivado', 'fecha_derivacion', 'entidad_derivacion', 'motivo_reaplicacion', 'observacion', 'firmado', 'firma_hash', 'firma_timestamp', 'firmado_por_id', 'firmado_por_nombre', 'firma_ip', 'completada_por', 'created_at'],
+        'caso_plan_accion' => ['id', 'caso_id', 'colegio_id', 'participante_id', 'plan_accion', 'medidas_preventivas', 'version', 'vigente', 'motivo_version', 'estado_plan', 'creado_por', 'created_at', 'updated_at'],
+        'caso_plan_intervencion' => ['id', 'caso_id', 'colegio_id', 'participante_id', 'tipo_medida', 'seguimiento_id', 'titulo', 'descripcion', 'responsable', 'fecha_compromiso', 'responsable_id', 'fecha_inicio', 'fecha_vencimiento', 'estado', 'observacion_cumplimiento', 'prioridad', 'created_at', 'updated_at'],
+        'caso_protocolo_tea' => ['id', 'caso_id', 'colegio_id', 'alumno_condicion_id', 'deteccion_registrada', 'fecha_deteccion', 'comunicacion_familia', 'fecha_comunicacion_familia', 'derivacion_salud', 'fecha_derivacion', 'establecimiento_salud', 'profesional_receptor', 'coordinacion_pie', 'ajustes_metodologicos', 'seguimiento_establecido', 'fecha_proximo_seguimiento', 'respuesta_salud_recibida', 'fecha_respuesta_salud', 'diagnostico_confirmado', 'estado_protocolo', 'observaciones', 'completado_por', 'created_at', 'updated_at'],
+        'caso_seguimiento' => ['id', 'colegio_id', 'caso_id', 'fecha_apertura', 'objetivo_general', 'estado', 'responsable_general_id', 'fecha_cierre', 'observacion_avance', 'proxima_revision', 'estado_seguimiento', 'medidas_preventivas', 'cumplimiento', 'comunicacion_apoderado_modalidad', 'comunicacion_apoderado_fecha', 'notas_comunicacion', 'actualizado_por', 'created_at', 'updated_at'],
+        'caso_seguimiento_avances' => ['id', 'plan_id', 'descripcion', 'porcentaje_avance', 'registrado_por', 'created_at'],
+        'caso_seguimiento_participantes' => ['id', 'colegio_id', 'caso_id', 'seguimiento_id', 'participante_id', 'tipo_participante', 'nombre_participante', 'run_participante', 'condicion', 'plan_accion', 'estado', 'created_at', 'updated_at'],
+        'caso_seguimiento_sesion' => ['id', 'caso_id', 'colegio_id', 'participante_id', 'plan_accion_id', 'observacion_avance', 'medidas_sesion', 'estado_caso', 'cumplimiento_plan', 'proxima_revision', 'comunicacion_apoderado', 'fecha_comunicacion_apoderado', 'notas_comunicacion', 'registrado_por', 'created_at', 'updated_at'],
+        'casos' => ['id', 'colegio_id', 'numero_caso', 'codigo', 'anio_caso', 'correlativo_anual', 'numero_caso_base', 'numero_caso_dv', 'fecha_ingreso', 'denunciante_nombre', 'es_anonimo', 'relato', 'contexto', 'involucra_moviles', 'estado', 'estado_caso_id', 'falta_id', 'denuncia_aspecto_id', 'requiere_reanalisis_ia', 'semaforo', 'prioridad', 'marco_legal', 'involucra_nna_tea', 'interes_superior_aplicado', 'interés_superior_aplicado', 'autonomia_progresiva_considerada', 'requiere_coordinacion_senape', 'requiere_coordinacion_salud', 'fecha_coordinacion_senape', 'observacion_coordinacion', 'creado_por', 'created_at', 'updated_at', 'denunciante_run', 'lugar_hechos', 'fecha_hechos', 'clasificacion_ia', 'denunciante', 'denunciante_persona_id', 'fecha_hora_incidente', 'canal_ingreso', 'descripcion', 'resumen_ia', 'recomendacion_ia', 'posible_aula_segura', 'aula_segura_estado', 'aula_segura_marcado_por', 'aula_segura_marcado_at', 'aula_segura_causales_preliminares', 'aula_segura_observacion_preliminar', 'ley21809_flags', 'rex782_flags', 'denuncia_normativa_observacion', 'comunicacion_apoderado_estado', 'comunicacion_apoderado_realizada', 'comunicacion_apoderado_modalidad', 'comunicacion_apoderado_fecha', 'comunicacion_apoderado_notas', 'comunicacion_apoderado_registrado_por', 'comunicacion_apoderado_registrado_at'],
+        'catalogo_condicion_especial' => ['id', 'codigo', 'nombre', 'categoria', 'ley_base', 'requiere_pie', 'activo'],
+        'checklist_preproduccion' => ['id', 'codigo', 'categoria', 'item', 'detalle', 'prioridad', 'estado', 'responsable', 'observacion', 'revisado_por', 'revisado_at', 'orden', 'created_at', 'updated_at'],
+        'colegio_modulos' => ['id', 'colegio_id', 'modulo_codigo', 'activo', 'fecha_activacion', 'fecha_expiracion', 'plan', 'created_at', 'updated_at'],
+        'colegio_reglamentos' => ['id', 'colegio_id', 'nombre_original', 'ruta_archivo', 'texto_contenido', 'caracteres', 'activo', 'subido_por', 'created_at', 'updated_at'],
+        'colegio_suscripciones' => ['id', 'colegio_id', 'modulo_codigo', 'plan', 'precio', 'estado', 'fecha_inicio', 'fecha_fin', 'created_at', 'updated_at'],
+        'colegios' => ['id', 'rbd', 'rut_entidad', 'nombre', 'logo_url', 'director_nombre', 'firma_url', 'dependencia', 'comuna', 'region', 'direccion', 'telefono', 'email', 'activo', 'fecha_vencimiento', 'estado_comercial', 'precio_uf_mensual', 'plan', 'contacto_comercial', 'email_comercial', 'telefono_comercial', 'created_at', 'updated_at'],
+        'comunidad_importacion_pendientes' => ['id', 'colegio_id', 'tipo', 'fila_csv', 'run_original', 'motivo', 'datos_json', 'estado', 'corregido_run', 'corregido_por', 'corregido_at', 'observacion', 'created_at', 'updated_at'],
+        'denuncia_areas' => ['id', 'codigo', 'nombre', 'descripcion', 'activo', 'created_at'],
+        'denuncia_aspectos' => ['id', 'area_id', 'codigo', 'nombre', 'descripcion', 'activo', 'created_at'],
+        'docentes' => ['id', 'colegio_id', 'run', 'nombres', 'apellido_paterno', 'apellido_materno', 'nombre_cache', 'nombre', 'email', 'telefono', 'cargo', 'activo', 'fecha_baja', 'motivo_baja', 'created_at', 'updated_at'],
+        'estado_caso' => ['id', 'codigo', 'nombre', 'orden_visual', 'activo'],
+        'faltas' => ['id', 'colegio_id', 'codigo', 'nombre', 'gravedad', 'descripcion', 'activo', 'created_at', 'updated_at'],
+        'ia_consumo' => ['id', 'colegio_id', 'usuario_id', 'caso_id', 'tipo_analisis', 'tokens_usados', 'costo_estimado', 'created_at'],
+        'importacion_pendientes' => ['id', 'colegio_id', 'tipo', 'fila', 'run', 'motivo', 'datos_json', 'estado', 'creado_por', 'created_at', 'updated_at'],
+        'logs_sistema' => ['id', 'colegio_id', 'usuario_id', 'modulo', 'accion', 'entidad', 'entidad_id', 'descripcion', 'ip', 'user_agent', 'created_at'],
+        'marcadores_normativos' => ['id', 'codigo', 'nombre', 'grupo', 'descripcion', 'orden', 'activo'],
+        'modulos_catalogo' => ['id', 'codigo', 'nombre', 'descripcion', 'es_premium', 'activo', 'created_at'],
+        'password_resets' => ['id', 'email', 'token', 'expires_at', 'used', 'created_at'],
+        'permisos' => ['id', 'codigo', 'nombre', 'modulo', 'grupo', 'descripcion', 'activo'],
+        'pruebas_integrales' => ['id', 'codigo', 'area', 'prueba', 'descripcion', 'prioridad', 'resultado', 'observacion', 'responsable', 'fecha_revision', 'revisado_por', 'activo', 'created_at', 'updated_at'],
+        'rol_permiso' => ['id', 'rol_id', 'permiso_id'],
+        'rol_permisos' => ['id', 'rol_id', 'permiso_id', 'permitido', 'created_at', 'updated_at'],
+        'roles' => ['id', 'codigo', 'nombre', 'descripcion', 'activo'],
+        'sistema_config' => ['id', 'clave', 'valor', 'tipo', 'descripcion', 'scope', 'actualizado_por', 'updated_at'],
+        'usuarios' => ['id', 'colegio_id', 'rol_id', 'run', 'nombre', 'email', 'password_hash', 'activo', 'ultimo_acceso', 'created_at', 'updated_at'],
+];
+
+    return isset($schema[$table]) && in_array($column, $schema[$table], true);
 }
 
 function col_quote(string $name): string
@@ -245,15 +338,7 @@ function col_payload_desde_post(int $userId): array
 {
     $planCodigo = col_clean((string)($_POST['plan_codigo'] ?? 'base')) ?? 'base';
 
-    $planes = [
-        'demo' => 'Demo',
-        'base' => 'Plan Base',
-        'profesional' => 'Plan Profesional',
-        'enterprise' => 'Plan Enterprise',
-    ];
-
     $estadoComercial = col_clean((string)($_POST['estado_comercial'] ?? 'activo')) ?? 'activo';
-
     $permitidosEstado = ['activo', 'demo', 'suspendido', 'vencido', 'cerrado'];
 
     if (!in_array($estadoComercial, $permitidosEstado, true)) {
@@ -261,38 +346,33 @@ function col_payload_desde_post(int $userId): array
     }
 
     $precio = (float)str_replace(',', '.', (string)($_POST['precio_uf_mensual'] ?? '0'));
-    $maxUsuarios = max(1, (int)($_POST['max_usuarios'] ?? 10));
-    $maxAlumnos = max(1, (int)($_POST['max_alumnos'] ?? 1000));
-
     $nombre = col_upper((string)($_POST['nombre'] ?? ''));
 
     if ($nombre === null) {
         throw new RuntimeException('Debe indicar el nombre del colegio.');
     }
 
+    $rbd = col_upper((string)($_POST['rbd'] ?? ''));
+    if ($rbd === null) {
+        throw new RuntimeException('Debe indicar el RBD del colegio.');
+    }
+
     return [
         'nombre' => $nombre,
-        'rbd' => col_upper((string)($_POST['rbd'] ?? '')),
-        'rut_sostenedor' => col_upper((string)($_POST['rut_sostenedor'] ?? '')),
-        'sostenedor_nombre' => col_upper((string)($_POST['sostenedor_nombre'] ?? '')),
+        'rbd' => $rbd,
+        'rut_entidad' => col_upper((string)($_POST['rut_sostenedor'] ?? $_POST['rut_entidad'] ?? '')),
         'director_nombre' => col_upper((string)($_POST['director_nombre'] ?? '')),
-        'contacto_nombre' => col_upper((string)($_POST['contacto_nombre'] ?? '')),
-        'contacto_email' => col_email((string)($_POST['contacto_email'] ?? '')),
-        'contacto_telefono' => col_upper((string)($_POST['contacto_telefono'] ?? '')),
+        'contacto_comercial' => col_upper((string)($_POST['contacto_nombre'] ?? $_POST['contacto_comercial'] ?? '')),
+        'email_comercial' => col_email((string)($_POST['contacto_email'] ?? $_POST['email_comercial'] ?? '')),
+        'telefono_comercial' => col_upper((string)($_POST['contacto_telefono'] ?? $_POST['telefono_comercial'] ?? '')),
         'direccion' => col_upper((string)($_POST['direccion'] ?? '')),
         'comuna' => col_upper((string)($_POST['comuna'] ?? '')),
         'region' => col_upper((string)($_POST['region'] ?? '')),
-        'plan_codigo' => $planCodigo,
-        'plan_nombre' => $planes[$planCodigo] ?? 'Plan Base',
+        'plan' => $planCodigo,
         'precio_uf_mensual' => $precio,
-        'max_usuarios' => $maxUsuarios,
-        'max_alumnos' => $maxAlumnos,
-        'fecha_inicio' => col_date((string)($_POST['fecha_inicio'] ?? '')),
         'fecha_vencimiento' => col_date((string)($_POST['fecha_vencimiento'] ?? '')),
         'estado_comercial' => $estadoComercial,
-        'observaciones' => col_upper((string)($_POST['observaciones'] ?? '')),
         'activo' => isset($_POST['activo']) ? 1 : 0,
-        'creado_por' => $userId > 0 ? $userId : null,
         'updated_at' => date('Y-m-d H:i:s'),
     ];
 }
@@ -395,43 +475,6 @@ try {
             );
         }
 
-        if ($accion === 'toggle_modulo_ia') {
-            $id          = (int)($_POST['id'] ?? 0);
-            $nuevoActivo = (int)($_POST['nuevo_activo'] ?? -1);
-            $fechaExp    = col_date((string)($_POST['fecha_expiracion'] ?? ''));
-
-            if ($id <= 0 || !in_array($nuevoActivo, [0, 1], true)) {
-                throw new RuntimeException('Datos de módulo no válidos.');
-            }
-
-            $pdo->prepare("
-                INSERT INTO colegio_modulos (colegio_id, modulo_codigo, activo, fecha_activacion, fecha_expiracion)
-                VALUES (?, 'ia', ?, NOW(), ?)
-                ON DUPLICATE KEY UPDATE
-                    activo           = VALUES(activo),
-                    fecha_activacion = IF(VALUES(activo) = 1, NOW(), fecha_activacion),
-                    fecha_expiracion = VALUES(fecha_expiracion),
-                    updated_at       = NOW()
-            ")->execute([$id, $nuevoActivo, $fechaExp]);
-
-            $stmt = $pdo->prepare("SELECT nombre FROM colegios WHERE id = ? LIMIT 1");
-            $stmt->execute([$id]);
-            $nombreColegio = (string)($stmt->fetchColumn() ?: 'Colegio');
-
-            registrar_bitacora(
-                'colegios',
-                $nuevoActivo === 1 ? 'activar_modulo_ia' : 'desactivar_modulo_ia',
-                'colegios',
-                $id,
-                ($nuevoActivo === 1 ? 'Módulo IA activado: ' : 'Módulo IA desactivado: ') . $nombreColegio
-            );
-
-            col_redirect(
-                'ok',
-                $nuevoActivo === 1 ? 'Módulo IA activado correctamente.' : 'Módulo IA desactivado.'
-            );
-        }
-
         throw new RuntimeException('Acción no válida.');
     }
 } catch (Throwable $e) {
@@ -457,8 +500,8 @@ if ($q !== '') {
         nombre LIKE ?
         OR rbd LIKE ?
         OR comuna LIKE ?
-        OR contacto_email LIKE ?
-        OR sostenedor_nombre LIKE ?
+        OR email_comercial LIKE ?
+        OR rut_entidad LIKE ?
     )";
     $params[] = '%' . $q . '%';
     $params[] = '%' . $q . '%';
@@ -480,7 +523,7 @@ if ($filtroEstado !== 'todos') {
 }
 
 if ($filtroPlan !== 'todos') {
-    $where[] = 'plan_codigo = ?';
+    $where[] = 'plan = ?';
     $params[] = $filtroPlan;
 }
 
@@ -495,24 +538,6 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute($params);
 $colegios = $stmt->fetchAll();
-
-// Cargar estado del módulo IA para todos los colegios listados
-$modulosIa = [];
-try {
-    $colegioIds = array_column($colegios, 'id');
-    if ($colegioIds) {
-        $in = implode(',', array_fill(0, count($colegioIds), '?'));
-        $stmtIa = $pdo->prepare("
-            SELECT colegio_id, activo, fecha_activacion, fecha_expiracion
-            FROM colegio_modulos
-            WHERE colegio_id IN ($in) AND modulo_codigo = 'ia'
-        ");
-        $stmtIa->execute($colegioIds);
-        foreach ($stmtIa->fetchAll() as $row) {
-            $modulosIa[(int)$row['colegio_id']] = $row;
-        }
-    }
-} catch (Throwable $e) { /* tabla puede no existir en ambientes locales */ }
 
 $stmtEdit = null;
 $editColegio = null;
@@ -860,48 +885,6 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         padding: 1.35rem;
     }
 }
-
-/* ── Módulo IA por colegio ───────────────────────────────── */
-.col-ia-panel {
-    margin-top: .75rem;
-    padding: .65rem .8rem;
-    border-radius: 12px;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: .6rem;
-}
-.col-ia-panel.off {
-    background: #f8fafc;
-    border-color: #e2e8f0;
-}
-.col-ia-label {
-    font-size: .78rem;
-    font-weight: 700;
-    color: #047857;
-    display: flex;
-    align-items: center;
-    gap: .3rem;
-}
-.col-ia-panel.off .col-ia-label { color: #64748b; }
-.col-ia-form {
-    display: none;
-    align-items: center;
-    gap: .5rem;
-    flex-wrap: wrap;
-    margin-top: .5rem;
-    width: 100%;
-}
-.col-ia-form.visible { display: flex; }
-.col-ia-form input[type="date"] {
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: .38rem .6rem;
-    font-size: .82rem;
-    font-family: inherit;
-}
 </style>
 
 <section class="col-hero">
@@ -1089,7 +1072,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 
                             <div style="margin-top:.6rem;">
                                 <span class="col-badge soft">
-                                    Plan: <?= e(col_pick($colegio, 'plan_nombre', 'Plan Base')) ?>
+                                    Plan: <?= e(col_pick($colegio, 'plan', 'Plan Base')) ?>
                                 </span>
 
                                 <span class="col-badge soft">
@@ -1110,14 +1093,14 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                             </div>
 
                             <div class="col-meta">
-                                Contacto: <?= e(col_pick($colegio, 'contacto_nombre')) ?> ·
-                                <?= e(col_pick($colegio, 'contacto_email')) ?> ·
-                                <?= e(col_pick($colegio, 'contacto_telefono')) ?>
+                                Contacto: <?= e(col_pick($colegio, 'contacto_comercial')) ?> ·
+                                <?= e(col_pick($colegio, 'email_comercial')) ?> ·
+                                <?= e(col_pick($colegio, 'telefono_comercial')) ?>
                             </div>
 
                             <div class="col-meta">
                                 Vigencia:
-                                <?= e(col_fecha($colegio['fecha_inicio'] ?? null)) ?>
+                                <?= e('-') ?>
                                 al
                                 <?= e(col_fecha($colegio['fecha_vencimiento'] ?? null)) ?>
                                 · Estado comercial:
@@ -1148,96 +1131,6 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                                     >
                                         <i class="bi <?= $estaActivo ? 'bi-pause-circle' : 'bi-check-circle' ?>"></i>
                                         <?= $estaActivo ? 'Inactivar' : 'Activar' ?>
-                                    </button>
-                                </form>
-                            </div>
-
-                            <?php
-                            // ── Bloque módulo IA ──────────────────────────────────────
-                            $iaData      = $modulosIa[$colegioId] ?? null;
-                            $iaActiva    = $iaData && (int)$iaData['activo'] === 1;
-                            $iaFechaExp  = $iaData['fecha_expiracion'] ?? null;
-                            $iaPanelId   = 'ia-form-' . $colegioId;
-
-                            // ¿El módulo IA está vencido?
-                            $iaVencida = $iaActiva && $iaFechaExp && strtotime($iaFechaExp) < time();
-                            if ($iaVencida) { $iaActiva = false; }
-
-                            [$iaVencTexto, $iaVencClase] = col_estado_vencimiento($iaFechaExp);
-                            ?>
-                            <div class="col-ia-panel <?= $iaActiva ? '' : 'off' ?>">
-                                <div class="col-ia-label">
-                                    <i class="bi bi-stars"></i>
-                                    Módulo Análisis IA:
-                                    <?php if ($iaActiva): ?>
-                                        <strong style="color:#047857;">Activo</strong>
-                                        <?php if ($iaFechaExp): ?>
-                                            <span class="col-badge <?= e($iaVencClase) ?>" style="margin-left:.3rem;">
-                                                <?= e($iaVencTexto) ?> (<?= e(col_fecha($iaFechaExp)) ?>)
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="col-badge ok" style="margin-left:.3rem;">Sin vencimiento</span>
-                                        <?php endif; ?>
-                                    <?php elseif ($iaVencida): ?>
-                                        <strong style="color:#b91c1c;">Vencido</strong>
-                                        <span class="col-badge danger" style="margin-left:.3rem;"><?= e($iaVencTexto) ?></span>
-                                    <?php else: ?>
-                                        <strong style="color:#94a3b8;">No contratado</strong>
-                                    <?php endif; ?>
-                                </div>
-
-                                <?php if ($iaActiva || $iaVencida): ?>
-                                    <!-- Desactivar -->
-                                    <form method="post" style="margin:0;">
-                                        <?= CSRF::field() ?>
-                                        <input type="hidden" name="_accion" value="toggle_modulo_ia">
-                                        <input type="hidden" name="id" value="<?= $colegioId ?>">
-                                        <input type="hidden" name="nuevo_activo" value="0">
-                                        <button class="col-action red" type="submit"
-                                                onclick="return confirm('¿Desactivar el módulo IA para este colegio?');"
-                                                style="font-size:.78rem;padding:.35rem .75rem;">
-                                            <i class="bi bi-x-circle"></i> Desactivar IA
-                                        </button>
-                                    </form>
-                                    <!-- Renovar -->
-                                    <button type="button"
-                                            class="col-action green"
-                                            style="font-size:.78rem;padding:.35rem .75rem;"
-                                            onclick="document.getElementById('<?= $iaPanelId ?>').classList.toggle('visible')">
-                                        <i class="bi bi-arrow-clockwise"></i> Renovar
-                                    </button>
-                                <?php else: ?>
-                                    <!-- Activar -->
-                                    <button type="button"
-                                            class="col-action green"
-                                            style="font-size:.78rem;padding:.35rem .75rem;"
-                                            onclick="document.getElementById('<?= $iaPanelId ?>').classList.toggle('visible')">
-                                        <i class="bi bi-stars"></i> Activar IA
-                                    </button>
-                                <?php endif; ?>
-
-                                <!-- Formulario inline activación / renovación -->
-                                <form method="post" class="col-ia-form" id="<?= $iaPanelId ?>">
-                                    <?= CSRF::field() ?>
-                                    <input type="hidden" name="_accion" value="toggle_modulo_ia">
-                                    <input type="hidden" name="id" value="<?= $colegioId ?>">
-                                    <input type="hidden" name="nuevo_activo" value="1">
-                                    <label style="font-size:.78rem;font-weight:700;color:#334155;">
-                                        Vence:
-                                    </label>
-                                    <input type="date"
-                                           name="fecha_expiracion"
-                                           value="<?= e($iaFechaExp ? substr($iaFechaExp, 0, 10) : '') ?>"
-                                           min="<?= date('Y-m-d') ?>"
-                                           placeholder="Sin límite">
-                                    <button class="col-submit green" type="submit"
-                                            style="font-size:.78rem;padding:.38rem .85rem;border-radius:999px;">
-                                        <i class="bi bi-check-circle"></i> Confirmar
-                                    </button>
-                                    <button type="button"
-                                            onclick="document.getElementById('<?= $iaPanelId ?>').classList.remove('visible')"
-                                            style="background:none;border:none;color:#64748b;cursor:pointer;font-size:.82rem;">
-                                        Cancelar
                                     </button>
                                 </form>
                             </div>
@@ -1291,12 +1184,12 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 
                     <div>
                         <label class="col-label">RUT sostenedor</label>
-                        <input class="col-control" type="text" name="rut_sostenedor" value="<?= e((string)($editColegio['rut_sostenedor'] ?? '')) ?>">
+                        <input class="col-control" type="text" name="rut_sostenedor" value="<?= e((string)($editColegio['rut_entidad'] ?? '')) ?>">
                     </div>
 
                     <div class="col-field full">
                         <label class="col-label">Sostenedor</label>
-                        <input class="col-control" type="text" name="sostenedor_nombre" value="<?= e((string)($editColegio['sostenedor_nombre'] ?? '')) ?>">
+                        <input class="col-control" type="text" name="sostenedor_nombre" value="<?= e((string)($editColegio['nombre'] ?? '')) ?>">
                     </div>
 
                     <div class="col-field full">
@@ -1306,17 +1199,17 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 
                     <div>
                         <label class="col-label">Contacto</label>
-                        <input class="col-control" type="text" name="contacto_nombre" value="<?= e((string)($editColegio['contacto_nombre'] ?? '')) ?>">
+                        <input class="col-control" type="text" name="contacto_nombre" value="<?= e((string)($editColegio['contacto_comercial'] ?? '')) ?>">
                     </div>
 
                     <div>
                         <label class="col-label">Correo contacto</label>
-                        <input class="col-control" type="email" name="contacto_email" value="<?= e((string)($editColegio['contacto_email'] ?? '')) ?>">
+                        <input class="col-control" type="email" name="contacto_email" value="<?= e((string)($editColegio['email_comercial'] ?? '')) ?>">
                     </div>
 
                     <div>
                         <label class="col-label">Teléfono contacto</label>
-                        <input class="col-control" type="text" name="contacto_telefono" value="<?= e((string)($editColegio['contacto_telefono'] ?? '')) ?>">
+                        <input class="col-control" type="text" name="contacto_telefono" value="<?= e((string)($editColegio['telefono_comercial'] ?? '')) ?>">
                     </div>
 
                     <div>
@@ -1336,7 +1229,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 
                     <div>
                         <label class="col-label">Plan</label>
-                        <?php $planActual = (string)($editColegio['plan_codigo'] ?? 'base'); ?>
+                        <?php $planActual = (string)($editColegio['plan'] ?? 'base'); ?>
                         <select class="col-control" name="plan_codigo">
                             <option value="demo" <?= $planActual === 'demo' ? 'selected' : '' ?>>Demo</option>
                             <option value="base" <?= $planActual === 'base' ? 'selected' : '' ?>>Base</option>
@@ -1369,7 +1262,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 
                     <div>
                         <label class="col-label">Fecha inicio</label>
-                        <input class="col-control" type="date" name="fecha_inicio" value="<?= e((string)($editColegio['fecha_inicio'] ?? '')) ?>">
+                        <input class="col-control" type="date" name="fecha_inicio" value="<?= e('') ?>">
                     </div>
 
                     <div>
