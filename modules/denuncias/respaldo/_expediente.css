@@ -1,0 +1,271 @@
+/* ═══════════════════════════════════════════════════════════
+   SGCE · Estilos compartidos para tabs del expediente
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Tipografía de sección ──────────────────────────────── */
+.tab-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -.015em;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: 1.25rem;
+}
+.tab-section-title .icon-box {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #2563eb;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .9rem;
+    flex-shrink: 0;
+}
+
+/* ── Divisor con etiqueta ───────────────────────────────── */
+.section-divider {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 2rem 0 1.5rem;
+    color: #94a3b8;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.section-divider::before,
+.section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+}
+
+/* ── Item card genérico ─────────────────────────────────── */
+.item-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: .75rem;
+    transition: box-shadow .15s, transform .15s;
+}
+.item-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,.08);
+    transform: translateY(-1px);
+}
+.item-card__title {
+    font-weight: 600;
+    font-size: .9rem;
+    color: #0f172a;
+    margin-bottom: .2rem;
+}
+.item-card__meta {
+    font-size: .76rem;
+    color: #64748b;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+}
+.item-card__meta .sep { color: #cbd5e1; }
+.item-card__body {
+    margin-top: .6rem;
+    font-size: .875rem;
+    color: #334155;
+    line-height: 1.6;
+}
+
+/* ── Badges semánticos ──────────────────────────────────── */
+.badge-role {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: .25em .7em;
+    border-radius: 20px;
+    border: 1px solid transparent;
+}
+.badge-role.victima     { background:#fef2f2; color:#b91c1c; border-color:#fecaca; }
+.badge-role.denunciante { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.badge-role.testigo     { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.badge-role.denunciado  { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.badge-role.externo     { background:#f8fafc; color:#475569; border-color:#e2e8f0; }
+
+/* ── Timeline (Historial) ───────────────────────────────── */
+.timeline { position: relative; padding-left: 2.25rem; }
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: .65rem; top: .5rem; bottom: .5rem;
+    width: 2px;
+    background: linear-gradient(to bottom, #3b82f6, #e2e8f0);
+    border-radius: 2px;
+}
+.timeline-item { position: relative; margin-bottom: 1.5rem; }
+.timeline-item:last-child { margin-bottom: 0; }
+.timeline-dot {
+    position: absolute;
+    left: -1.75rem;
+    top: .25rem;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px #bfdbfe;
+}
+.timeline-item:first-child .timeline-dot {
+    background: #0f172a;
+    box-shadow: 0 0 0 2px #94a3b8;
+}
+
+/* ── Formularios ────────────────────────────────────────── */
+.form-panel {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1.5rem;
+}
+.form-label {
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    color: #374151;
+    margin-bottom: .35rem;
+}
+.form-control, .form-select {
+    font-size: .875rem;
+    border-color: #d1d5db;
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    transition: border-color .15s, box-shadow .15s;
+}
+.form-control:focus, .form-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+
+/* ── Botón primario SGCE ────────────────────────────────── */
+.btn-primary-sgce,
+.btn-sgce-primary {
+    background: #1e40af;
+    color: #fff !important;
+    border: none;
+    border-radius: 8px;
+    font-size: .84rem;
+    font-weight: 600;
+    padding: .5rem 1.1rem;
+    transition: background .15s, transform .1s, box-shadow .15s;
+}
+.btn-primary-sgce:hover,
+.btn-sgce-primary:hover {
+    background: #1d3a9e;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(30,64,175,.3);
+}
+
+/* ── Vacío state ────────────────────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: #94a3b8;
+}
+.empty-state i {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: .75rem;
+    opacity: .5;
+}
+.empty-state p { font-size: .875rem; margin: 0; }
+
+/* ── Resultado búsqueda persona ─────────────────────────── */
+.resultados-persona {
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: .85rem;
+}
+.resultado-persona-item {
+    padding: .5rem .75rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background .1s;
+}
+.resultado-persona-item:hover { background: #eff6ff; color: #1d4ed8; }
+
+/* ── Evidencia card ─────────────────────────────────────── */
+.evidencia-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: .75rem;
+    transition: box-shadow .15s;
+}
+.evidencia-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.evidencia-icon {
+    width: 42px; height: 42px;
+    background: #eff6ff;
+    color: #2563eb;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+/* ── Participante card ──────────────────────────────────── */
+.participante-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: .75rem;
+}
+.participante-avatar {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #1e40af, #3b82f6);
+    color: #fff;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* ── details/summary mejorado ───────────────────────────── */
+details.update-form > summary {
+    font-size: .82rem;
+    font-weight: 600;
+    color: #2563eb;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .4rem 0;
+    user-select: none;
+}
+details.update-form > summary::-webkit-details-marker { display: none; }
+details.update-form > summary::before {
+    content: '\F282';
+    font-family: 'bootstrap-icons';
+    font-size: .85rem;
+    transition: transform .2s;
+}
+details.update-form[open] > summary::before {
+    transform: rotate(90deg);
+}
+details.update-form .form-inner {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-top: .75rem;
+}

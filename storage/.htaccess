@@ -1,0 +1,19 @@
+Options -Indexes
+
+# Bloquear ejecución de PHP en uploads/evidencias
+<FilesMatch "\.(php|php3|php4|php5|phtml|shtml|cgi|pl)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Bloquear acceso web a logs y cache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(logs|cache)/ - [F,L]
+</IfModule>
+
+# Bloquear acceso directo a archivos de log y cache
+<FilesMatch "\.(log|cache)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>

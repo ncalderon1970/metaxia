@@ -1,0 +1,595 @@
+/* ================================================================
+   METIS — UI Components v1.0
+   Clases reutilizables para todos los módulos.
+   Requiere metis-tokens.css cargado primero.
+   ================================================================
+
+   ÍNDICE
+   1. Reset base
+   2. Hero de módulo
+   3. Cards / Paneles
+   4. Badges / Pills
+   5. Botones
+   6. Tablas
+   7. Formularios
+   8. KPIs
+   9. Alertas / Mensajes
+   10. Tipografía utilitaria
+   11. Responsive helpers
+
+   USO RÁPIDO EN UN MÓDULO NUEVO:
+   <div class="m-hero">
+     <div class="m-hero__body">
+       <h2 class="m-hero__title">Título</h2>
+       <p class="m-hero__desc">Descripción</p>
+     </div>
+     <div class="m-hero__actions">
+       <a class="m-btn m-btn--primary" href="#">Acción</a>
+     </div>
+   </div>
+   ================================================================ */
+
+/* ── 1. RESET BASE ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-base);
+  font-size:   var(--text-base);
+  font-weight: var(--fw-normal);
+  line-height: var(--leading-normal);
+  color:       var(--color-text);
+  background:  var(--color-bg);
+  margin:      0;
+  min-height:  100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ── 2. HERO DE MÓDULO ─────────────────────────────────────── */
+/* Uso: <div class="m-hero [m-hero--blue|green|purple]"> */
+.m-hero {
+  background:
+    radial-gradient(circle at 90% 18%, rgba(16,185,129,.2), transparent 30%),
+    linear-gradient(135deg, var(--c-navy) 0%, var(--c-navy-mid) 58%, var(--c-blue) 100%);
+  color: #fff;
+  border-radius: var(--radius-xl);
+  padding: var(--sp-8);
+  margin-bottom: 1.2rem;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.m-hero--green {
+  background:
+    radial-gradient(circle at 90% 18%, rgba(16,185,129,.28), transparent 30%),
+    linear-gradient(135deg, #064e3b 0%, #065f46 58%, #059669 100%);
+}
+.m-hero--purple {
+  background:
+    radial-gradient(circle at 90% 18%, rgba(139,92,246,.28), transparent 30%),
+    linear-gradient(135deg, #1e1b4b 0%, #312e81 58%, #6366f1 100%);
+}
+.m-hero--amber {
+  background:
+    radial-gradient(circle at 90% 18%, rgba(245,158,11,.24), transparent 30%),
+    linear-gradient(135deg, #451a03 0%, #78350f 58%, #d97706 100%);
+}
+
+.m-hero__body { flex: 1; min-width: 0; }
+
+.m-hero__eyebrow {
+  font-size: var(--text-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.65);
+  margin: 0 0 .4rem;
+}
+
+.m-hero__title {
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-black);
+  letter-spacing: -.02em;
+  margin: 0 0 .4rem;
+  line-height: var(--leading-tight);
+}
+
+.m-hero__desc {
+  font-size: var(--text-base);
+  color: rgba(255,255,255,.72);
+  margin: 0;
+  max-width: 700px;
+  line-height: var(--leading-relaxed);
+}
+
+.m-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: .2rem;
+}
+
+/* ── 3. CARDS / PANELES ────────────────────────────────────── */
+.m-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.m-card__head {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.m-card__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--fw-black);
+  color: var(--c-slate-900);
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.m-card__actions {
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.m-card__body { padding: 1.25rem; }
+
+.m-card__footer {
+  padding: .85rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--c-slate-50);
+  font-size: var(--text-sm);
+  color: var(--color-text-sec);
+}
+
+/* ── 4. BADGES / PILLS ─────────────────────────────────────── */
+/* Uso: <span class="m-badge m-badge--ok"> */
+.m-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  border-radius: var(--radius-btn);
+  padding: .22rem .65rem;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--c-slate-600);
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.m-badge--ok      { background: var(--c-success-light);  border-color: var(--c-success-border); color: var(--c-success-text);  }
+.m-badge--warn    { background: var(--c-warning-light); border-color: var(--c-warning-border);color: var(--c-warning-text);  }
+.m-badge--danger  { background: var(--c-danger-light);  border-color: var(--c-danger-border); color: var(--c-danger-text);   }
+.m-badge--info    { background: var(--c-info-light);    border-color: var(--c-info-border);   color: var(--c-info-text);     }
+.m-badge--soft    { background: var(--c-neutral-light); border-color: var(--c-neutral-border);color: var(--c-neutral-text);  }
+.m-badge--navy    { background: var(--c-metis-critical);border-color: var(--c-metis-critical);color: var(--c-critical-text); }
+.m-badge--critico { background: var(--c-metis-critical);border-color: var(--c-metis-critical);color: var(--c-critical-text); }
+/* Aliases semánticos Metis */
+.m-badge--verde    { background: var(--c-success-light);  border-color: var(--c-success-border); color: var(--c-success-text);  }
+.m-badge--amarillo { background: var(--c-warning-light);  border-color: var(--c-warning-border); color: var(--c-warning-text);  }
+.m-badge--rojo     { background: var(--c-danger-light);   border-color: var(--c-danger-border);  color: var(--c-danger-text);   }
+.m-badge--negro    { background: var(--c-metis-critical); border-color: var(--c-metis-critical); color: var(--c-critical-text); }
+.m-badge--azul     { background: var(--c-info-light);     border-color: var(--c-info-border);    color: var(--c-info-text);     }
+.m-badge--gris     { background: var(--c-neutral-light);  border-color: var(--c-neutral-border); color: var(--c-neutral-text);  }
+/* Indicador de punto */
+.m-badge-dot { width:7px; height:7px; border-radius:50%; display:inline-block; flex-shrink:0; }
+
+.m-badge--sm { font-size: var(--text-2xs); padding: .16rem .48rem; }
+.m-badge--lg { font-size: var(--text-sm);  padding: .3rem .85rem;  }
+
+/* ── 5. BOTONES ─────────────────────────────────────────────── */
+.m-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .42rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-btn);
+  padding: .6rem 1.1rem;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-bold);
+  font-family: var(--font-base);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: var(--transition);
+  line-height: 1;
+}
+
+/* Variantes */
+.m-btn--primary {
+  background: var(--c-blue);
+  color: #fff;
+  border-color: var(--c-blue);
+}
+.m-btn--primary:hover { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+
+.m-btn--success {
+  background: var(--c-green-mid);
+  color: #fff;
+  border-color: var(--c-green-mid);
+}
+.m-btn--success:hover { background: var(--c-green); color: #fff; }
+
+.m-btn--danger {
+  background: var(--c-red-mid);
+  color: #fff;
+  border-color: var(--c-red-mid);
+}
+.m-btn--danger:hover { background: var(--c-red); color: #fff; }
+
+.m-btn--ghost {
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  border-color: rgba(255,255,255,.28);
+}
+.m-btn--ghost:hover { background: rgba(255,255,255,.24); color: #fff; }
+
+.m-btn--soft {
+  background: var(--c-slate-50);
+  color: var(--c-slate-700);
+  border-color: var(--c-slate-200);
+}
+.m-btn--soft:hover { background: var(--c-slate-100); border-color: var(--c-slate-300); }
+
+.m-btn--info {
+  background: var(--c-blue-light);
+  color: var(--c-blue);
+  border-color: var(--c-blue-border);
+}
+.m-btn--info:hover { background: #dbeafe; color: #1d4ed8; }
+
+.m-btn--warn {
+  background: var(--c-amber-light);
+  color: var(--c-amber);
+  border-color: var(--c-amber-border);
+}
+
+/* Variante Metis Primary (azul oscuro) */
+.m-btn--metis {
+  background: var(--c-metis-primary);
+  color: #fff;
+  border-color: var(--c-metis-primary);
+}
+.m-btn--metis:hover { background: #0f2740; border-color: #0f2740; color: #fff; }
+
+/* Variante warning sólido */
+.m-btn--warning {
+  background: var(--c-metis-warning);
+  color: #fff;
+  border-color: var(--c-metis-warning);
+}
+.m-btn--warning:hover { background: #b45309; border-color: #b45309; }
+
+/* Outline variants */
+.m-btn--outline {
+  background: transparent;
+  color: var(--c-metis-primary);
+  border-color: var(--c-metis-primary);
+}
+.m-btn--outline:hover { background: var(--c-metis-primary); color: #fff; }
+
+.m-btn--outline-action {
+  background: transparent;
+  color: var(--c-metis-action);
+  border-color: var(--c-metis-action);
+}
+.m-btn--outline-action:hover { background: var(--c-metis-action); color: #fff; }
+
+.m-btn--outline-success {
+  background: transparent;
+  color: var(--c-metis-success);
+  border-color: var(--c-metis-success);
+}
+.m-btn--outline-success:hover { background: var(--c-metis-success); color: #fff; }
+
+.m-btn--outline-danger {
+  background: transparent;
+  color: var(--c-metis-danger);
+  border-color: var(--c-metis-danger);
+}
+.m-btn--outline-danger:hover { background: var(--c-metis-danger); color: #fff; }
+
+/* Ghost oscuro (para uso en contenido claro) */
+.m-btn--ghost-dark {
+  background: transparent;
+  color: var(--c-slate-600);
+  border-color: transparent;
+}
+.m-btn--ghost-dark:hover { color: var(--c-slate-900); }
+
+/* Tamaños */
+.m-btn--sm { padding: .32rem .7rem; font-size: var(--text-xs); }
+.m-btn--md { padding: .6rem 1.1rem; font-size: var(--text-sm); }
+.m-btn--lg { padding: .78rem 1.4rem; font-size: var(--text-md); }
+
+/* ── 6. TABLAS ─────────────────────────────────────────────── */
+.m-table-wrap { width: 100%; overflow-x: auto; }
+
+.m-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+}
+
+.m-table th {
+  background: var(--c-slate-50);
+  color: var(--c-slate-500);
+  font-size: var(--text-2xs);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  padding: .72rem .9rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.m-table th:first-child { border-radius: var(--radius-sm) 0 0 0; }
+.m-table th:last-child  { border-radius: 0 var(--radius-sm) 0 0; }
+
+.m-table td {
+  padding: .78rem .9rem;
+  border-bottom: 1px solid var(--c-slate-100);
+  color: var(--c-slate-800);
+  vertical-align: middle;
+}
+
+.m-table tbody tr:last-child td { border-bottom: none; }
+.m-table tbody tr:hover td { background: var(--c-slate-50); }
+
+.m-table .m-table__main { font-weight: var(--fw-semi); color: var(--c-slate-900); }
+.m-table .m-table__sub  { font-size: var(--text-xs); color: var(--color-text-sec); margin-top: .15rem; line-height: 1.3; }
+
+/* ── 7. FORMULARIOS ────────────────────────────────────────── */
+.m-form-group { margin-bottom: 1rem; }
+
+.m-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  color: var(--c-slate-700);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: .38rem;
+}
+
+.m-input,
+.m-select,
+.m-textarea {
+  width: 100%;
+  border: 1px solid var(--c-slate-200);
+  border-radius: var(--radius-md);
+  padding: .62rem .85rem;
+  font-size: var(--text-base);
+  font-family: var(--font-base);
+  color: var(--c-slate-900);
+  background: var(--color-surface);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  line-height: 1.4;
+}
+
+.m-input:focus,
+.m-select:focus,
+.m-textarea:focus {
+  border-color: var(--c-blue-mid);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+
+.m-textarea { resize: vertical; min-height: 90px; }
+
+.m-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: .28rem;
+}
+
+/* Input con ícono */
+.m-input-wrap { position: relative; }
+.m-input-wrap .m-input { padding-left: 2.4rem; }
+.m-input-icon {
+  position: absolute;
+  left: .75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  pointer-events: none;
+}
+
+/* Grid de formulario */
+.m-form-grid { display: grid; gap: 1rem; }
+.m-form-grid--2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.m-form-grid--3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.m-form-grid--4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+
+/* ── 8. KPIs ───────────────────────────────────────────────── */
+.m-kpis { display: grid; gap: .9rem; margin-bottom: 1.2rem; }
+.m-kpis--4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+.m-kpis--5 { grid-template-columns: repeat(5, minmax(0,1fr)); }
+.m-kpis--6 { grid-template-columns: repeat(6, minmax(0,1fr)); }
+
+.m-kpi {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem;
+  box-shadow: var(--shadow-sm);
+  cursor: default;
+  transition: var(--transition);
+}
+
+.m-kpi:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+.m-kpi__label {
+  font-size: var(--text-2xs);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--color-text-sec);
+  margin-bottom: .38rem;
+}
+
+.m-kpi__value {
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-black);
+  color: var(--c-slate-900);
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+
+.m-kpi__sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: .3rem;
+}
+
+/* Colores de énfasis */
+.m-kpi--danger .m-kpi__value  { color: var(--c-red);   }
+.m-kpi--warn   .m-kpi__value  { color: var(--c-amber); }
+.m-kpi--ok     .m-kpi__value  { color: var(--c-green); }
+.m-kpi--info   .m-kpi__value  { color: var(--c-blue);  }
+
+.m-kpi--danger { border-top: 3px solid var(--c-red-border);    }
+.m-kpi--warn   { border-top: 3px solid var(--c-amber-border);  }
+.m-kpi--ok     { border-top: 3px solid var(--c-green-border);  }
+.m-kpi--info   { border-top: 3px solid var(--c-blue-border);   }
+
+/* Clickable KPI */
+.m-kpi--link { cursor: pointer; text-decoration: none; display: block; color: inherit; }
+
+/* ── 9. ALERTAS / MENSAJES ─────────────────────────────────── */
+.m-alert {
+  border-radius: var(--radius-md);
+  padding: .85rem 1rem;
+  margin-bottom: 1rem;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  border: 1px solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  line-height: var(--leading-relaxed);
+}
+
+.m-alert i { font-size: var(--text-md); flex-shrink: 0; margin-top: .05rem; }
+
+.m-alert--ok     { background: var(--c-green-light); border-color: var(--c-green-border); color: #166534; }
+.m-alert--warn   { background: var(--c-amber-light); border-color: var(--c-amber-border); color: var(--c-amber); }
+.m-alert--danger { background: var(--c-red-light);   border-color: var(--c-red-border);   color: var(--c-red); }
+.m-alert--info   { background: var(--c-blue-light);  border-color: var(--c-blue-border);  color: #1e40af; }
+.m-alert--soft   { background: var(--c-slate-50);    border-color: var(--c-slate-200);    color: var(--c-slate-700); }
+
+/* ── 10. TIPOGRAFÍA UTILITARIA ─────────────────────────────── */
+.m-text-2xs   { font-size: var(--text-2xs); }
+.m-text-xs    { font-size: var(--text-xs); }
+.m-text-sm    { font-size: var(--text-sm); }
+.m-text-base  { font-size: var(--text-base); }
+.m-text-md    { font-size: var(--text-md); }
+.m-text-lg    { font-size: var(--text-lg); }
+.m-text-xl    { font-size: var(--text-xl); }
+
+.m-fw-normal  { font-weight: var(--fw-normal); }
+.m-fw-medium  { font-weight: var(--fw-medium); }
+.m-fw-semi    { font-weight: var(--fw-semi); }
+.m-fw-bold    { font-weight: var(--fw-bold); }
+.m-fw-black   { font-weight: var(--fw-black); }
+
+.m-text-navy  { color: var(--c-navy); }
+.m-text-blue  { color: var(--c-blue); }
+.m-text-green { color: var(--c-green); }
+.m-text-amber { color: var(--c-amber); }
+.m-text-red   { color: var(--c-red); }
+.m-text-sec   { color: var(--color-text-sec); }
+.m-text-muted { color: var(--color-text-muted); }
+.m-text-white { color: #fff; }
+
+.m-mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+
+/* Section title (reemplaza el patrón de cada módulo) */
+.m-section-title {
+  font-size: var(--text-md);
+  font-weight: var(--fw-black);
+  color: var(--c-slate-900);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: .55rem;
+  margin: 0 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.m-section-title .m-badge { margin-left: auto; }
+
+/* Empty state */
+.m-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.m-empty i { font-size: 2rem; display: block; margin-bottom: .5rem; opacity: .5; }
+
+/* Separador */
+.m-divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.2rem 0;
+}
+
+/* ── 11. RESPONSIVE HELPERS ────────────────────────────────── */
+@media (max-width: 1200px) {
+  .m-kpis--6 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .m-kpis--5 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .m-form-grid--4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+@media (max-width: 900px) {
+  .m-hero { flex-direction: column; }
+  .m-kpis--4,
+  .m-kpis--5,
+  .m-kpis--6 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .m-form-grid--3,
+  .m-form-grid--4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+@media (max-width: 600px) {
+  .m-hero { padding: 1.35rem; }
+  .m-hero__title { font-size: var(--text-xl); }
+  .m-kpis--4,
+  .m-kpis--5,
+  .m-kpis--6 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .m-form-grid--2,
+  .m-form-grid--3,
+  .m-form-grid--4 { grid-template-columns: 1fr; }
+  .m-btn { font-size: var(--text-xs); padding: .52rem .85rem; }
+}
