@@ -14,6 +14,7 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -128,6 +129,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $stmt = $pdo->prepare("SELECT * FROM colegios WHERE id = ? LIMIT 1");
 $stmt->execute([$colegioId]);
 $col = $stmt->fetch() ?: [];
+
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Administración', APP_URL . '/modules/admin/index.php', 'bi-gear', 'secondary'),
+    metis_context_action('Usuarios', APP_URL . '/modules/admin/usuarios_colegio.php', 'bi-people-fill', 'secondary'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'primary'),
+]);
 
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>

@@ -6,6 +6,7 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -227,6 +228,13 @@ try {
 } catch (Throwable $e) {
     $error = 'Error al cargar alertas: ' . $e->getMessage();
 }
+
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+    metis_context_action('Denuncias', APP_URL . '/modules/denuncias/index.php', 'bi-megaphone', 'primary'),
+    metis_context_action('Seguimiento', APP_URL . '/modules/seguimiento/index.php', 'bi-clipboard2-check', 'secondary'),
+    metis_context_action('Reportes', APP_URL . '/modules/reportes/index.php', 'bi-bar-chart', 'secondary'),
+]);
 
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
@@ -526,14 +534,6 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
     <div>
         <h2><i class="bi bi-bell-fill" style="opacity:.8;margin-right:.35rem;"></i>Alertas institucionales</h2>
         <p>Control de alertas pendientes, resueltas y situaciones que requieren gestión del equipo de convivencia.</p>
-    </div>
-    <div class="alertas-actions">
-        <a class="alertas-btn" href="<?= APP_URL ?>/modules/denuncias/index.php">
-            <i class="bi bi-megaphone"></i> Denuncias
-        </a>
-        <a class="alertas-btn" href="<?= APP_URL ?>/modules/dashboard/index.php">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
     </div>
 </section>
 

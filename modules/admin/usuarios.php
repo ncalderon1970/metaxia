@@ -6,6 +6,7 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -602,6 +603,13 @@ $totalInactivos = usr_count($pdo, 'usuarios', 'activo = 0');
 $totalSinColegio = usr_count($pdo, 'usuarios', 'colegio_id IS NULL');
 $totalSinRol = usr_count($pdo, 'usuarios', 'rol_id IS NULL');
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Administración', APP_URL . '/modules/admin/index.php', 'bi-gear', 'secondary'),
+    metis_context_action('Colegios', APP_URL . '/modules/colegios/index.php', 'bi-building', 'primary'),
+    metis_context_action('Roles', APP_URL . '/modules/roles/index.php', 'bi-person-badge', 'secondary'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 
@@ -942,22 +950,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         Esta pantalla es de uso administrativo central.
     </p>
 
-    <div class="usr-actions">
-        <a class="usr-btn" href="<?= APP_URL ?>/modules/admin/index.php">
-            <i class="bi bi-gear"></i>
-            Administración
-        </a>
 
-        <a class="usr-btn" href="<?= APP_URL ?>/modules/colegios/index.php">
-            <i class="bi bi-building"></i>
-            Colegios
-        </a>
-
-        <a class="usr-btn" href="<?= APP_URL ?>/modules/roles/index.php">
-            <i class="bi bi-person-badge"></i>
-            Roles
-        </a>
-    </div>
 </section>
 
 <?php if ($status === 'ok' && $msg !== ''): ?>

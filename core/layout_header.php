@@ -13,11 +13,13 @@ if (!function_exists('e')) {
     require_once dirname(__DIR__) . '/core/helpers.php';
 }
 
+require_once dirname(__DIR__) . '/core/context_actions.php';
+
 $currentUser = Auth::user() ?? [];
 
 $pageTitle = $pageTitle ?? 'Metis';
 $pageSubtitle = $pageSubtitle ?? 'Sistema de Gestión de Convivencia Escolar';
-$pageHeaderActions = (isset($pageHeaderActions) && is_array($pageHeaderActions)) ? $pageHeaderActions : [];
+$pageHeaderActions = (isset($pageHeaderActions) && is_array($pageHeaderActions)) ? metis_context_actions($pageHeaderActions) : [];
 $layoutHasPageHeaderActions = !empty($pageHeaderActions);
 
 $usuarioNombre = (string)($currentUser['nombre'] ?? 'Usuario');
@@ -694,11 +696,16 @@ $menuAdmin = [
             width: 100%;
             display: flex;
             align-items: center;
-            gap: .48rem;
+            gap: .5rem;
             flex-wrap: wrap;
-            margin-top: .62rem;
-            padding-top: .62rem;
-            border-top: 1px solid rgba(226,232,240,.78);
+            margin-top: .68rem;
+            padding: .62rem .72rem;
+            border: 1px solid #dbeafe;
+            border-left: 4px solid var(--metis-blue);
+            border-radius: 13px;
+            background:
+                linear-gradient(180deg, rgba(248,251,255,.98) 0%, rgba(241,247,255,.96) 100%);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.82), 0 7px 18px rgba(15,23,42,.045);
         }
 
         .metis-page-action-btn {
@@ -707,7 +714,7 @@ $menuAdmin = [
             justify-content: center;
             gap: .42rem;
             min-height: 34px;
-            padding: .44rem .76rem;
+            padding: .44rem .78rem;
             border-radius: 9px;
             border: 1px solid #cbd5e1;
             background: #ffffff;
@@ -733,6 +740,18 @@ $menuAdmin = [
             background: #eff6ff;
             border-color: #bfdbfe;
             color: #1d4ed8;
+        }
+
+        .metis-page-action-btn.secondary {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #334155;
+        }
+
+        .metis-page-action-btn.soft {
+            background: #f8fafc;
+            border-color: #e2e8f0;
+            color: #475569;
         }
 
         .metis-page-action-btn.success {

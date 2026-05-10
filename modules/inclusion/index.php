@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 if (!Auth::canOperate()) { http_response_code(403); exit('Acceso no autorizado.'); }
@@ -21,6 +22,7 @@ $filtroTea    = (string)($_GET['tea'] ?? '');
 $buscar       = trim((string)($_GET['q']      ?? ''));
 
 $pageTitle = 'Inclusión y NEE · Metis';
+$pageSubtitle = 'Registro de condiciones especiales, protocolo TEA y reportes de inclusión.';
 
 // ── KPIs ────────────────────────────────────────────────────
 $kpis = ['total'=>0,'tea'=>0,'pie'=>0,'derivados'=>0,'sin_derivar'=>0,
@@ -116,6 +118,13 @@ try {
     $catalogo = $stmtC->fetchAll();
 } catch (Throwable $e) {}
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Solo TEA', APP_URL . '/modules/inclusion/index.php?tea=1', 'bi-heart-pulse-fill', 'warning'),
+    metis_context_action('Todos', APP_URL . '/modules/inclusion/index.php', 'bi-grid-3x3-gap', 'secondary'),
+    metis_context_action('Reporte', APP_URL . '/modules/inclusion/reporte_inclusion.php', 'bi-file-earmark-bar-graph', 'primary', true, '_blank', 'noopener'),
+    metis_context_action('CSV', APP_URL . '/modules/inclusion/reporte_inclusion.php?modo=csv', 'bi-filetype-csv', 'success'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 <style>
@@ -171,22 +180,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
                 Registro de condiciones especiales · Protocolo TEA (Ley 21.545) · Ajustes razonables
             </p>
         </div>
-        <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-self:center;position:relative;">
-            <a href="?tea=1" style="background:rgba(245,158,11,.85);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-weight:700;font-size:.84rem;padding:.45rem 1rem;text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="bi bi-heart-pulse-fill"></i> Solo TEA
-            </a>
-            <a href="<?= APP_URL ?>/modules/inclusion/reporte_inclusion.php" target="_blank"
-               style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;font-weight:600;font-size:.84rem;padding:.45rem 1rem;text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="bi bi-file-earmark-bar-graph"></i> Reporte
-            </a>
-            <a href="<?= APP_URL ?>/modules/inclusion/reporte_inclusion.php?modo=csv" 
-               style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;font-weight:600;font-size:.84rem;padding:.45rem 1rem;text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="bi bi-filetype-csv"></i> CSV
-            </a>
-            <a href="?" style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;font-weight:600;font-size:.84rem;padding:.45rem 1rem;text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="bi bi-grid-3x3-gap"></i> Todos
-            </a>
-        </div>
+
     </div>
 </div>
 

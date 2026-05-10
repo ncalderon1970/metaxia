@@ -6,6 +6,7 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -137,6 +138,12 @@ if (!isset($accionesTopbarActual['alertas'])) {
 }
 
 $pageTitle = 'Configuración de desarrollo · Metis';
+$pageSubtitle = 'Panel técnico para controlar navegación, sidebar y acciones contextuales.';
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Administración', APP_URL . '/modules/admin/index.php', 'bi-gear', 'secondary'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'primary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 <style>

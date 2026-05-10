@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -318,6 +319,16 @@ $herramientas = [
     ],
 ];
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Colegios', APP_URL . '/modules/colegios/index.php', 'bi-building', 'primary'),
+    metis_context_action('Usuarios', APP_URL . '/modules/admin/usuarios.php', 'bi-person-gear', 'secondary'),
+    metis_context_action('Financiero', APP_URL . '/modules/admin/financiero.php', 'bi-cash-coin', 'secondary'),
+    metis_context_action('Permisos', APP_URL . '/modules/admin/permisos.php', 'bi-sliders', 'secondary'),
+    metis_context_action('Centro de control', APP_URL . '/modules/admin/control_proyecto.php', 'bi-kanban', 'secondary'),
+    metis_context_action('Diagnóstico', APP_URL . '/modules/admin/diagnostico.php', 'bi-shield-check', 'success'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 
@@ -563,43 +574,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         preproducción, diagnóstico, respaldos, auditoría y documentación operativa.
     </p>
 
-    <div class="adm-actions">
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/colegios/index.php">
-            <i class="bi bi-building"></i>
-            Colegios
-        </a>
 
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/admin/usuarios.php">
-            <i class="bi bi-person-gear"></i>
-            Usuarios
-        </a>
-
-
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/admin/financiero.php">
-            <i class="bi bi-cash-coin"></i>
-            Financiero
-        </a>
-
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/admin/permisos.php">
-            <i class="bi bi-sliders"></i>
-            Permisos
-        </a>
-
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/admin/control_proyecto.php">
-            <i class="bi bi-kanban"></i>
-            Centro de control
-        </a>
-
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/admin/diagnostico.php">
-            <i class="bi bi-shield-check"></i>
-            Diagnóstico
-        </a>
-
-        <a class="adm-btn" href="<?= APP_URL ?>/modules/dashboard/index.php">
-            <i class="bi bi-speedometer2"></i>
-            Dashboard
-        </a>
-    </div>
 </section>
 
 <section class="adm-kpis">

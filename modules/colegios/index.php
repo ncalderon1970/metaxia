@@ -6,6 +6,7 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -562,6 +563,13 @@ $stmtMrr = $pdo->query("
 ");
 $mrrUf = (float)$stmtMrr->fetchColumn();
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Administración', APP_URL . '/modules/admin/index.php', 'bi-gear', 'secondary'),
+    metis_context_action('Usuarios', APP_URL . '/modules/admin/usuarios.php', 'bi-person-gear', 'primary'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+    metis_context_action('Centro de control', APP_URL . '/modules/admin/control_proyecto.php', 'bi-kanban', 'secondary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 
@@ -894,27 +902,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         fechas de vigencia, contactos institucionales y estado de activación.
     </p>
 
-    <div class="col-actions">
-        <a class="col-btn" href="<?= APP_URL ?>/modules/admin/index.php">
-            <i class="bi bi-gear"></i>
-            Administración
-        </a>
 
-        <a class="col-btn" href="<?= APP_URL ?>/modules/admin/usuarios.php">
-            <i class="bi bi-person-gear"></i>
-            Usuarios
-        </a>
-
-        <a class="col-btn" href="<?= APP_URL ?>/modules/dashboard/index.php">
-            <i class="bi bi-speedometer2"></i>
-            Dashboard
-        </a>
-
-        <a class="col-btn" href="<?= APP_URL ?>/modules/admin/control_proyecto.php">
-            <i class="bi bi-kanban"></i>
-            Centro de control
-        </a>
-    </div>
 </section>
 
 <?php if ($status === 'ok' && $msg !== ''): ?>

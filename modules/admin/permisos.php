@@ -6,6 +6,7 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -223,6 +224,12 @@ foreach ($roles as $rolCheck) {
     }
 }
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Administración', APP_URL . '/modules/admin/index.php', 'bi-gear', 'secondary'),
+    metis_context_action('Usuarios', APP_URL . '/modules/admin/usuarios.php', 'bi-person-gear', 'primary'),
+    metis_context_action('Roles', APP_URL . '/modules/roles/index.php', 'bi-person-badge', 'secondary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 <style>
@@ -231,11 +238,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 <section class="perm-hero">
     <h2>Matriz de permisos por rol</h2>
     <p>Administra qué puede realizar cada perfil dentro de Metis. Esta matriz prepara el control fino de acceso para colegios, usuarios, expedientes, reportes, auditoría y operación administrativa.</p>
-    <div class="perm-actions">
-        <a class="perm-btn" href="<?= APP_URL ?>/modules/admin/index.php"><i class="bi bi-gear"></i>Administración</a>
-        <a class="perm-btn" href="<?= APP_URL ?>/modules/admin/usuarios.php"><i class="bi bi-person-gear"></i>Usuarios</a>
-        <a class="perm-btn" href="<?= APP_URL ?>/modules/roles/index.php"><i class="bi bi-person-badge"></i>Roles</a>
-    </div>
+    
 </section>
 <?php if ($status === 'ok' && $msg !== ''): ?><div class="perm-msg ok"><?= e($msg) ?></div><?php endif; ?>
 <?php if ($status === 'error' && $msg !== ''): ?><div class="perm-msg error"><?= e($msg) ?></div><?php endif; ?>

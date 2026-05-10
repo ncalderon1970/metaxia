@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -444,6 +445,14 @@ $graficosDebug = [
     'estado'      => array_sum($graficos['por_estado']),
 ];
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+    metis_context_action('Denuncias', APP_URL . '/modules/denuncias/index.php', 'bi-megaphone', 'primary'),
+    metis_context_action('Exportar CSV', $exportUrl, 'bi-file-earmark-spreadsheet', 'success'),
+    metis_context_action('PDF estadístico', $pdfEstUrl, 'bi-file-earmark-pdf', 'danger', true, '_blank', 'noopener'),
+    metis_context_action('Diagnóstico', APP_URL . '/modules/admin/diagnostico.php', 'bi-shield-check', 'secondary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 
@@ -492,13 +501,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         riesgo, gestión pendiente, cierres formales y trazabilidad general del sistema.
     </p>
 
-    <div class="rep-actions">
-        <a class="rep-btn" href="<?= APP_URL ?>/modules/dashboard/index.php"><i class="bi bi-speedometer2"></i>Dashboard</a>
-        <a class="rep-btn" href="<?= APP_URL ?>/modules/denuncias/index.php"><i class="bi bi-megaphone"></i>Denuncias</a>
-        <a class="rep-btn green" href="<?= e($exportUrl) ?>"><i class="bi bi-file-earmark-spreadsheet"></i>Exportar CSV</a>
-        <a class="rep-btn" href="<?= e($pdfEstUrl) ?>" target="_blank" style="background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.5);"><i class="bi bi-file-earmark-pdf"></i>PDF Estadístico</a>
-        <a class="rep-btn" href="<?= APP_URL ?>/modules/admin/diagnostico.php"><i class="bi bi-shield-check"></i>Diagnóstico</a>
-    </div>
+
 </section>
 
 <?php if ($error !== ''): ?>

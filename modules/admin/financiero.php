@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -453,6 +454,13 @@ $usuariosActivos = fin_count($pdo, 'usuarios', 'activo = 1');
 $casosTotal = fin_count($pdo, 'casos');
 $alumnosTotal = fin_count($pdo, 'alumnos');
 
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Administración', APP_URL . '/modules/admin/index.php', 'bi-gear', 'secondary'),
+    metis_context_action('Colegios', APP_URL . '/modules/colegios/index.php', 'bi-building', 'primary'),
+    metis_context_action('Exportar CSV', APP_URL . '/modules/admin/financiero.php?' . http_build_query(array_merge($_GET, ['export' => 'csv'])), 'bi-file-earmark-spreadsheet', 'success'),
+    metis_context_action('Usuarios', APP_URL . '/modules/admin/usuarios.php', 'bi-person-gear', 'secondary'),
+]);
+
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
 
@@ -554,22 +562,7 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         ingreso anual estimado, riesgo comercial y conversión de planes demo.
     </p>
 
-    <div class="fin-actions">
-        <a class="fin-btn" href="<?= APP_URL ?>/modules/admin/index.php">
-            <i class="bi bi-gear"></i>
-            Administración
-        </a>
 
-        <a class="fin-btn" href="<?= APP_URL ?>/modules/colegios/index.php">
-            <i class="bi bi-building"></i>
-            Colegios
-        </a>
-
-        <a class="fin-btn" href="<?= APP_URL ?>/modules/admin/financiero.php?<?= http_build_query(array_merge($_GET, ['export' => 'csv'])) ?>">
-            <i class="bi bi-filetype-csv"></i>
-            Exportar CSV
-        </a>
-    </div>
 </section>
 
 <section class="fin-kpis">

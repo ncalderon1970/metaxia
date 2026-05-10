@@ -12,19 +12,5 @@
                 Vista panorámica de todos los casos activos · <?= date('d-m-Y H:i') ?>
             </p>
         </div>
-        <div style="display:flex;gap:.5rem;align-self:center;flex-wrap:wrap;">
-            <a href="<?= APP_URL ?>/modules/denuncias/index.php"
-               style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);
-                      border-radius:7px;font-size:.83rem;font-weight:600;padding:.45rem 1rem;
-                      text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;">
-                <i class="bi bi-folder2-open"></i> Todas las denuncias
-            </a>
-            <a href="<?= APP_URL ?>/modules/alertas/index.php"
-               style="background:rgba(220,38,38,.25);color:#fff;border:1px solid rgba(220,38,38,.4);
-                      border-radius:7px;font-size:.83rem;font-weight:600;padding:.45rem 1rem;
-                      text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;">
-                <i class="bi bi-bell-fill"></i> Alertas
-            </a>
-        </div>
     </div>
 </div>

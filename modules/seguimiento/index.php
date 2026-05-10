@@ -13,6 +13,7 @@ require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
+require_once dirname(__DIR__, 2) . '/core/context_actions.php';
 
 Auth::requireLogin();
 
@@ -20,6 +21,7 @@ $pdo       = DB::conn();
 $user      = Auth::user() ?? [];
 $cid       = (int)($user['colegio_id'] ?? 0);
 $pageTitle = 'Seguimiento · Metis';
+$pageSubtitle = 'Bandeja ejecutiva de casos activos, planes, revisiones y alertas.';
 
 function seg_norm_date(string $value): string
 {
@@ -246,6 +248,13 @@ try {
 } catch (Throwable $e) {
     $casos = [];
 }
+
+$pageHeaderActions = metis_context_actions([
+    metis_context_action('Denuncias', APP_URL . '/modules/denuncias/index.php', 'bi-folder2-open', 'primary'),
+    metis_context_action('Alertas', APP_URL . '/modules/alertas/index.php', 'bi-bell-fill', 'warning'),
+    metis_context_action('Dashboard', APP_URL . '/modules/dashboard/index.php', 'bi-speedometer2', 'secondary'),
+    metis_context_action('Reportes', APP_URL . '/modules/reportes/index.php', 'bi-bar-chart', 'secondary'),
+]);
 
 // ── Presentación ─────────────────────────────────────────────────────────────
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
