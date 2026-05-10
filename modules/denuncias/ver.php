@@ -187,16 +187,7 @@ require_once __DIR__ . '/includes/ver_actions.php';
 $contexto = ver_cargar_contexto($pdo, $casoId, $colegioId);
 extract($contexto, EXTR_OVERWRITE);
 
-$pageTitle = 'Expediente · ' . ($caso['numero_caso'] ?? 'Caso');
-$pageSubtitle = 'Revisión integral del caso, intervinientes, declaraciones, evidencias e historial';
-
-require_once dirname(__DIR__, 2) . '/core/layout_header.php';
-require_once __DIR__ . '/partials/ver_styles.php';
-require_once __DIR__ . '/partials/ver_header.php';
-require_once __DIR__ . '/partials/ver_messages.php';
-require_once __DIR__ . '/partials/ver_tabs.php';
-
-// Validar tabs permitidos para evitar path traversal
+// Validar tabs permitidos para evitar path traversal antes de renderizar la navegación contextual.
 $tabsPermitidos = [
     'resumen', 'seguimiento', 'clasificacion', 'participantes',
     'declaraciones', 'evidencias', 'gestion', 'aula_segura',
@@ -207,6 +198,16 @@ if (!in_array($tab, $tabsPermitidos, true)) {
     $tab = 'resumen';
 }
 
+$pageTitle = 'Expediente · ' . ($caso['numero_caso'] ?? 'Caso');
+$pageSubtitle = 'Revisión integral del caso, intervinientes, declaraciones, evidencias e historial';
+
+require_once dirname(__DIR__, 2) . '/core/layout_header.php';
+require_once __DIR__ . '/partials/ver_styles.php';
+require_once __DIR__ . '/partials/ver_context_nav_styles.php';
+require_once __DIR__ . '/partials/ver_header.php';
+require_once __DIR__ . '/partials/ver_messages.php';
+require_once __DIR__ . '/partials/ver_tabs.php';
+
 $tabFile = __DIR__ . '/partials/tab_' . $tab . '.php';
 
 if (is_file($tabFile)) {
@@ -214,5 +215,8 @@ if (is_file($tabFile)) {
 } else {
     require __DIR__ . '/partials/tab_resumen.php';
 }
+
+// Cierre del contenedor abierto por partials/ver_tabs.php.
+echo "</main></div>";
 
 require_once dirname(__DIR__, 2) . '/core/layout_footer.php';
