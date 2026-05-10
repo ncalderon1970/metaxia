@@ -8,20 +8,22 @@ require_once dirname(__DIR__, 2) . '/core/CSRF.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
 
 Auth::requireLogin();
+
 if (!Auth::canOperate()) {
     http_response_code(403);
     exit('Acceso no autorizado.');
 }
 
+$pdo = DB::conn();
 $user = Auth::user() ?? [];
-$rolCodigo = (string)($user['rol_codigo'] ?? '');
+$colegioId = (int)($user['colegio_id'] ?? 0);
 
-$pageTitle = 'Importar datos · Metis';
-$pageSubtitle = 'Carga masiva de comunidad educativa con validación de RUN y control de pendientes';
+$pageTitle = 'Importar comunidad educativa · Metis';
+$pageSubtitle = 'Carga masiva de alumnos, apoderados, docentes y asistentes con validación de RUN';
 
+$tipoActual = isset($_GET['tipo']) ? trim((string)$_GET['tipo']) : 'alumnos';
 $status = isset($_GET['status']) ? trim((string)$_GET['status']) : '';
 $msg = isset($_GET['msg']) ? trim((string)$_GET['msg']) : '';
-$tipoActual = isset($_GET['tipo']) ? trim((string)$_GET['tipo']) : 'apoderados';
 
 $tipos = [
     'alumnos' => 'Alumnos',
@@ -31,8 +33,57 @@ $tipos = [
 ];
 
 if (!isset($tipos[$tipoActual])) {
-    $tipoActual = 'apoderados';
+    $tipoActual = 'alumnos';
 }
+
+$kpis = [
+    'alumnos' => 0,
+    'apoderados' => 0,
+    'docentes' => 0,
+    'asistentes' => 0,
+    'pendientes' => 0,
+];
+
+try {
+    foreach (['alumnos', 'apoderados', 'docentes', 'asistentes'] as $tabla) {
+        $s = $pdo->prepare("SELECT COUNT(*) FROM {$tabla} WHERE colegio_id = ?");
+        $s->execute([$colegioId]);
+        $kpis[$tabla] = (int)$s->fetchColumn();
+    }
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS importacion_pendientes (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            colegio_id INT UNSIGNED DEFAULT NULL,
+            tipo VARCHAR(40) NOT NULL,
+            fila INT UNSIGNED DEFAULT NULL,
+            run VARCHAR(30) DEFAULT NULL,
+            motivo TEXT NOT NULL,
+            datos_json LONGTEXT DEFAULT NULL,
+            estado VARCHAR(40) NOT NULL DEFAULT 'pendiente',
+            creado_por INT UNSIGNED DEFAULT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX idx_importacion_pendientes_tipo (tipo),
+            INDEX idx_importacion_pendientes_estado (estado),
+            INDEX idx_importacion_pendientes_colegio (colegio_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $sp = $pdo->prepare("SELECT COUNT(*) FROM importacion_pendientes WHERE colegio_id = ? AND estado = 'pendiente'");
+    $sp->execute([$colegioId]);
+    $kpis['pendientes'] = (int)$sp->fetchColumn();
+} catch (Throwable $e) {
+    // El tablero de carga no debe romper por un KPI secundario.
+}
+
+$pageHeaderActions = [
+    metis_context_action('Comunidad', APP_URL . '/modules/comunidad/index.php', 'bi-people', 'secondary'),
+    metis_context_action('Pendientes', APP_URL . '/modules/importar/pendientes.php', 'bi-exclamation-triangle', 'warning'),
+    metis_context_action('Plantilla', APP_URL . '/modules/importar/plantilla.php?tipo=' . urlencode($tipoActual), 'bi-download', 'primary'),
+    metis_context_action('Vincular apoderados', APP_URL . '/modules/importar/vincular_apoderados.php', 'bi-diagram-2', 'soft'),
+];
 
 require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 ?>
@@ -49,14 +100,11 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
     box-shadow: 0 18px 45px rgba(15,23,42,.18);
 }
 .imp-hero h2 { margin: 0 0 .45rem; font-size: 1.85rem; font-weight: 900; }
-.imp-hero p { margin: 0; color: #bfdbfe; max-width: 920px; line-height: 1.55; }
-.imp-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
-.imp-btn {
-    display: inline-flex; align-items: center; gap: .42rem; border-radius: 7px;
-    padding: .62rem 1rem; font-size: .84rem; font-weight: 900; text-decoration: none;
-    border: 1px solid rgba(255,255,255,.28); color: #fff; background: rgba(255,255,255,.12);
-}
-.imp-btn:hover { color: #fff; }
+.imp-hero p { margin: 0; color: #bfdbfe; max-width: 980px; line-height: 1.55; }
+.imp-kpis { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:.75rem; margin-bottom: 1.1rem; }
+.imp-kpi { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:1rem; box-shadow:0 8px 20px rgba(15,23,42,.05); }
+.imp-kpi strong { display:block; color:#0f172a; font-size:1.45rem; line-height:1; margin-bottom:.35rem; }
+.imp-kpi span { color:#64748b; font-size:.78rem; font-weight:800; }
 .imp-panel {
     background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
     box-shadow: 0 12px 28px rgba(15,23,42,.06); overflow: hidden; margin-bottom: 1.2rem;
@@ -85,20 +133,24 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
 .imp-note { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 16px; padding: 1rem; line-height: 1.5; font-size: .9rem; }
 .imp-list { margin: 0; padding-left: 1.15rem; color: #475569; line-height: 1.6; }
 .imp-code { background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:.75rem; font-family: monospace; font-size:.82rem; color:#334155; overflow:auto; }
+@media (max-width: 1000px) { .imp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .imp-layout, .imp-form { grid-template-columns: 1fr; } .imp-hero { padding: 1.35rem; } }
 </style>
 
 <section class="imp-hero">
     <h2>Importar comunidad educativa</h2>
     <p>
-        Carga masiva con validación de RUN, lectura de archivos separados por punto y coma,
-        actualización de duplicados y envío de errores a pendientes.
+        Carga masiva con validación de RUN, actualización de registros existentes y envío de errores a pendientes.
+        El procesamiento trabaja sobre el esquema estable de Metis y respeta el colegio activo del usuario.
     </p>
-    <div class="imp-actions">
-        <a class="imp-btn" href="<?= APP_URL ?>/modules/comunidad/index.php"><i class="bi bi-people"></i> Comunidad</a>
-        <a class="imp-btn" href="<?= APP_URL ?>/modules/importar/pendientes.php"><i class="bi bi-exclamation-triangle"></i> Pendientes</a>
-        <a class="imp-btn" href="<?= APP_URL ?>/modules/dashboard/index.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
-    </div>
+</section>
+
+<section class="imp-kpis" aria-label="Indicadores de comunidad educativa">
+    <div class="imp-kpi"><strong><?= (int)$kpis['alumnos'] ?></strong><span>Alumnos</span></div>
+    <div class="imp-kpi"><strong><?= (int)$kpis['apoderados'] ?></strong><span>Apoderados</span></div>
+    <div class="imp-kpi"><strong><?= (int)$kpis['docentes'] ?></strong><span>Docentes</span></div>
+    <div class="imp-kpi"><strong><?= (int)$kpis['asistentes'] ?></strong><span>Asistentes</span></div>
+    <div class="imp-kpi"><strong><?= (int)$kpis['pendientes'] ?></strong><span>Pendientes</span></div>
 </section>
 
 <?php if ($status === 'ok' && $msg !== ''): ?>
@@ -147,31 +199,18 @@ require_once dirname(__DIR__, 2) . '/core/layout_header.php';
         </div>
         <div class="imp-panel-body">
             <div class="imp-note">
-                Para apoderados se aceptan estos encabezados y separador punto y coma.
+                El archivo puede estar separado por punto y coma, coma o tabulación. Para Excel se recomienda usar punto y coma.
             </div>
-            <div class="imp-code" style="margin-top:.85rem;">run;nombres;apellido_paterno;apellido_materno;parentesco;email;telefono;direccion</div>
+            <div class="imp-code" style="margin-top:.85rem;">run;nombres;apellido_paterno;apellido_materno;curso;email;telefono;direccion</div>
             <ul class="imp-list" style="margin-top:.85rem;">
                 <li>El RUN se limpia y valida con dígito verificador.</li>
-                <li>Los nombres y apellidos se guardan en mayúscula.</li>
+                <li>Nombres, apellidos, curso, cargo y dirección se guardan en mayúscula.</li>
                 <li>El correo se conserva en minúscula.</li>
-                <li>Si el RUN ya existe, se actualizan los datos faltantes o corregidos.</li>
-                <li>Si el RUN es inválido, queda en pendientes para revisión.</li>
+                <li>Si el RUN ya existe en el colegio, se actualiza el registro.</li>
+                <li>Si el RUN es inválido o faltan datos obligatorios, queda en pendientes.</li>
             </ul>
         </div>
     </aside>
 </div>
 
-<?php // Acceso rápido al módulo de vinculación
-?>
-<div style="margin-top:1.5rem;padding:1rem 1.5rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-    <div>
-        <strong style="color:#0369a1;font-size:.9rem;"><i class="bi bi-diagram-2-fill"></i> Vincular alumnos con apoderados</strong>
-        <p style="font-size:.8rem;color:#0c4a6e;margin:.25rem 0 0;">Carga masiva de relaciones alumno-apoderado usando RUNs. Ideal después de importar ambas listas.</p>
-    </div>
-    <a href="<?= APP_URL ?>/modules/importar/vincular_apoderados.php"
-       style="background:#0369a1;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-size:.83rem;font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0;">
-       <i class="bi bi-link-45deg"></i> Ir al módulo de vinculación
-    </a>
-</div>
-<?php
-require_once dirname(__DIR__, 2) . '/core/layout_footer.php'; ?>
+<?php require_once dirname(__DIR__, 2) . '/core/layout_footer.php'; ?>
