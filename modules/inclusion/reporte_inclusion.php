@@ -10,8 +10,9 @@ Auth::requireLogin();
 if (!Auth::canOperate()) { http_response_code(403); exit('Acceso no autorizado.'); }
 
 $pdo    = DB::conn();
-$user   = Auth::user();
+$user   = Auth::user() ?? [];
 $cid    = (int)($user['colegio_id'] ?? 0);
+if ($cid <= 0 && !Auth::isSuperAdmin()) { http_response_code(403); exit('Colegio no determinado.'); }
 $modo   = trim((string)($_GET['modo'] ?? 'vista'));   // vista | csv
 $filtroTipo = trim((string)($_GET['tipo'] ?? ''));
 
@@ -31,11 +32,15 @@ if ($filtroTipo !== '') { $where[] = 'ace.tipo_condicion = ?'; $params[] = $filt
 try {
     $stmtD = $pdo->prepare("
         SELECT
-            a.run, a.curso,
+            a.run,
+            a.curso,
             CONCAT_WS(' ', a.apellido_paterno, a.apellido_materno, a.nombres) AS nombre_alumno,
-            EXTRACT(YEAR FROM NOW()) - EXTRACT(YEAR FROM a.fecha_nacimiento)   AS edad,
+            CASE
+                WHEN a.fecha_nacimiento IS NULL THEN NULL
+                ELSE TIMESTAMPDIFF(YEAR, a.fecha_nacimiento, CURDATE())
+            END AS edad,
             ace.tipo_condicion,
-            COALESCE(cat.nombre, ace.tipo_condicion)                           AS condicion_nombre,
+            COALESCE(cat.nombre, ace.tipo_condicion) AS condicion_nombre,
             ace.estado_diagnostico,
             ace.nivel_apoyo,
             ace.tiene_pie,
@@ -50,27 +55,38 @@ try {
             ace.requiere_ajustes,
             ace.descripcion_ajustes,
             ace.observaciones,
-            -- Protocolo TEA
             pte.estado_protocolo,
             pte.deteccion_registrada,
             pte.comunicacion_familia,
-            pte.derivacion_salud       AS prot_derivacion,
+            pte.derivacion_salud AS prot_derivacion,
             pte.coordinacion_pie,
             pte.ajustes_metodologicos,
             pte.seguimiento_establecido,
             pte.diagnostico_confirmado,
             pte.fecha_proximo_seguimiento,
-            -- apoderados
-            GROUP_CONCAT(DISTINCT ap.nombre ORDER BY aa.es_titular DESC SEPARATOR ' / ') AS apoderados,
-            GROUP_CONCAT(DISTINCT COALESCE(aa.tipo_relacion,'') ORDER BY aa.es_titular DESC SEPARATOR ' / ') AS parentescos
+            apo.apoderados,
+            apo.parentescos
         FROM alumno_condicion_especial ace
-        INNER JOIN alumnos a ON a.id = ace.alumno_id
-        LEFT JOIN catalogo_condicion_especial cat ON cat.codigo = ace.tipo_condicion
-        LEFT JOIN caso_protocolo_tea pte ON pte.alumno_condicion_id = ace.id
-        LEFT JOIN alumno_apoderado aa ON aa.alumno_id = a.id
-        LEFT JOIN apoderados ap ON ap.id = aa.apoderado_id
+        INNER JOIN alumnos a
+            ON a.id = ace.alumno_id
+           AND a.colegio_id = ace.colegio_id
+        LEFT JOIN catalogo_condicion_especial cat
+            ON cat.codigo = ace.tipo_condicion
+           AND cat.activo = 1
+        LEFT JOIN caso_protocolo_tea pte
+            ON pte.alumno_condicion_id = ace.id
+           AND pte.colegio_id = ace.colegio_id
+        LEFT JOIN (
+            SELECT
+                aa.alumno_id,
+                GROUP_CONCAT(DISTINCT ap.nombre ORDER BY aa.es_titular DESC SEPARATOR ' / ') AS apoderados,
+                GROUP_CONCAT(DISTINCT COALESCE(aa.tipo_relacion, aa.parentesco, '') ORDER BY aa.es_titular DESC SEPARATOR ' / ') AS parentescos
+            FROM alumno_apoderado aa
+            INNER JOIN apoderados ap ON ap.id = aa.apoderado_id
+            WHERE aa.activo = 1
+            GROUP BY aa.alumno_id
+        ) apo ON apo.alumno_id = a.id
         WHERE " . implode(' AND ', $where) . "
-        GROUP BY ace.id
         ORDER BY (ace.tipo_condicion LIKE 'tea%') DESC, ace.estado_diagnostico, a.apellido_paterno
     ");
     $stmtD->execute($params);

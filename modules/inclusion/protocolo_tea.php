@@ -12,154 +12,208 @@ if (!Auth::canOperate()) { http_response_code(403); exit('Acceso no autorizado.'
 $pdo         = DB::conn();
 $user        = Auth::user() ?? [];
 $cid         = (int)($user['colegio_id'] ?? 0);
+$userId      = (int)($user['id'] ?? 0);
 $alumnoId    = (int)($_GET['alumno_id']    ?? 0);
 $condicionId = (int)($_GET['condicion_id'] ?? 0);
 $origen      = trim((string)($_GET['origen'] ?? 'inclusion')); // inclusion | alumno
 
+if ($cid <= 0 && !Auth::isSuperAdmin()) { http_response_code(403); exit('Colegio no determinado.'); }
 if ($alumnoId <= 0) { http_response_code(400); exit('Alumno no válido.'); }
 
+function pt_fecha_post(string $key): ?string
+{
+    $value = trim((string)($_POST[$key] ?? ''));
+    if ($value === '') {
+        return null;
+    }
+
+    $dt = DateTimeImmutable::createFromFormat('Y-m-d', $value);
+    if (!$dt || $dt->format('Y-m-d') !== $value) {
+        throw new InvalidArgumentException('La fecha indicada no tiene un formato válido.');
+    }
+
+    if ($dt > new DateTimeImmutable('today')) {
+        throw new InvalidArgumentException('No se permiten fechas futuras en el protocolo.');
+    }
+
+    return $value;
+}
+
+function pt_bool_post(string $key): int
+{
+    return isset($_POST[$key]) ? 1 : 0;
+}
+
 // Cargar alumno
-$stmtAl = $pdo->prepare("
-    SELECT *, CONCAT_WS(' ', apellido_paterno, apellido_materno, nombres) AS nombre
-    FROM alumnos WHERE id = ? AND colegio_id = ? LIMIT 1
-");
+$stmtAl = $pdo->prepare("\n    SELECT *, CONCAT_WS(' ', apellido_paterno, apellido_materno, nombres) AS nombre\n    FROM alumnos\n    WHERE id = ? AND colegio_id = ?\n    LIMIT 1\n");
 $stmtAl->execute([$alumnoId, $cid]);
 $alumno = $stmtAl->fetch();
 if (!$alumno) { http_response_code(404); exit('Alumno no encontrado.'); }
 
-// Cargar condición especial
+// Cargar condición especial TEA asociada al alumno
 $condicion = null;
 try {
     if ($condicionId > 0) {
-        $s = $pdo->prepare("
-            SELECT ace.*, COALESCE(cat.nombre, ace.tipo_condicion) AS condicion_nombre
-            FROM alumno_condicion_especial ace
-            LEFT JOIN catalogo_condicion_especial cat ON cat.codigo = ace.tipo_condicion
-            WHERE ace.id = ? AND ace.alumno_id = ? AND ace.colegio_id = ? LIMIT 1
-        ");
+        $s = $pdo->prepare("\n            SELECT ace.*, COALESCE(cat.nombre, ace.tipo_condicion) AS condicion_nombre\n            FROM alumno_condicion_especial ace\n            LEFT JOIN catalogo_condicion_especial cat\n                ON cat.codigo = ace.tipo_condicion\n               AND cat.activo = 1\n            WHERE ace.id = ?\n              AND ace.alumno_id = ?\n              AND ace.colegio_id = ?\n              AND ace.activo = 1\n              AND ace.tipo_condicion LIKE 'tea%'\n            LIMIT 1\n        ");
         $s->execute([$condicionId, $alumnoId, $cid]);
         $condicion = $s->fetch() ?: null;
     }
+
     if (!$condicion) {
-        $s2 = $pdo->prepare("
-            SELECT ace.*, COALESCE(cat.nombre, ace.tipo_condicion) AS condicion_nombre
-            FROM alumno_condicion_especial ace
-            LEFT JOIN catalogo_condicion_especial cat ON cat.codigo = ace.tipo_condicion
-            WHERE ace.alumno_id = ? AND ace.colegio_id = ? AND ace.tipo_condicion LIKE 'tea%'
-            ORDER BY ace.created_at DESC LIMIT 1
-        ");
+        $s2 = $pdo->prepare("\n            SELECT ace.*, COALESCE(cat.nombre, ace.tipo_condicion) AS condicion_nombre\n            FROM alumno_condicion_especial ace\n            LEFT JOIN catalogo_condicion_especial cat\n                ON cat.codigo = ace.tipo_condicion\n               AND cat.activo = 1\n            WHERE ace.alumno_id = ?\n              AND ace.colegio_id = ?\n              AND ace.activo = 1\n              AND ace.tipo_condicion LIKE 'tea%'\n            ORDER BY ace.created_at DESC\n            LIMIT 1\n        ");
         $s2->execute([$alumnoId, $cid]);
         $condicion = $s2->fetch() ?: null;
-        if ($condicion) $condicionId = (int)$condicion['id'];
+        if ($condicion) {
+            $condicionId = (int)$condicion['id'];
+        }
     }
-} catch (Throwable $e) {}
+} catch (Throwable $e) {
+    $condicion = null;
+}
 
 // Cargar protocolo existente
 $protocolo = null;
 try {
-    $sp = $pdo->prepare("
-        SELECT * FROM caso_protocolo_tea
-        WHERE colegio_id = ? AND alumno_condicion_id = ?
-        ORDER BY id DESC LIMIT 1
-    ");
-    $sp->execute([$cid, $condicionId]);
-    $protocolo = $sp->fetch() ?: null;
-} catch (Throwable $e) {}
+    if ($condicionId > 0) {
+        $sp = $pdo->prepare("\n            SELECT *\n            FROM caso_protocolo_tea\n            WHERE colegio_id = ?\n              AND alumno_condicion_id = ?\n            ORDER BY id DESC\n            LIMIT 1\n        ");
+        $sp->execute([$cid, $condicionId]);
+        $protocolo = $sp->fetch() ?: null;
+    }
+} catch (Throwable $e) {
+    $protocolo = null;
+}
 
-// Cargar historial de sesiones del protocolo
+// Cargar historial de sesiones vinculadas a casos donde el alumno figure como participante.
 $historialSesiones = [];
 try {
-    if ($protocolo) {
-        $sh = $pdo->prepare("
-            SELECT css.*, u.nombre AS responsable_nombre
-            FROM caso_seguimiento_sesion css
-            LEFT JOIN usuarios u ON u.id = css.registrado_por
-            WHERE css.caso_id = 0 AND css.colegio_id = ? AND css.participante_id = ?
-            ORDER BY css.created_at DESC LIMIT 10
-        ");
-        $sh->execute([$cid, $alumnoId]);
-        $historialSesiones = $sh->fetchAll();
-    }
-} catch (Throwable $e) {}
+    $sh = $pdo->prepare("\n        SELECT css.*, u.nombre AS responsable_nombre, c.numero_caso\n        FROM caso_seguimiento_sesion css\n        INNER JOIN caso_participantes cp\n            ON cp.id = css.participante_id\n           AND cp.caso_id = css.caso_id\n           AND cp.colegio_id = css.colegio_id\n        INNER JOIN casos c\n            ON c.id = css.caso_id\n           AND c.colegio_id = css.colegio_id\n        LEFT JOIN usuarios u ON u.id = css.registrado_por\n        WHERE css.colegio_id = ?\n          AND cp.tipo_persona = 'alumno'\n          AND cp.persona_id = ?\n        ORDER BY css.created_at DESC\n        LIMIT 10\n    ");
+    $sh->execute([$cid, $alumnoId]);
+    $historialSesiones = $sh->fetchAll();
+} catch (Throwable $e) {
+    $historialSesiones = [];
+}
 
 $msgOk = $msgErr = '';
 
 // POST: guardar protocolo
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    CSRF::requireValid($_POST['_token'] ?? null);
-
-    $d  = fn(string $k) => trim((string)($_POST[$k] ?? ''));
-    $i  = fn(string $k) => (int)($_POST[$k] ?? 0);
-    $dt = fn(string $k) => (function() use ($d, $k) {
-        $v = $d($k); return ($v !== '' && strtotime($v)) ? $v : null;
-    })();
-    $userId = (int)($user['id'] ?? 0);
-
     try {
+        CSRF::requireValid($_POST['_token'] ?? null);
+
+        if (!$condicion || $condicionId <= 0) {
+            throw new RuntimeException('Debe existir una condición TEA activa para registrar el protocolo.');
+        }
+
+        $d = fn(string $k): string => trim((string)($_POST[$k] ?? ''));
+
         $data = [
-            'colegio_id'                  => $cid,
-            'alumno_condicion_id'         => $condicionId ?: null,
-            'deteccion_registrada'        => $i('deteccion_registrada'),
-            'fecha_deteccion'             => $dt('fecha_deteccion'),
-            'comunicacion_familia'        => $i('comunicacion_familia'),
-            'fecha_comunicacion_familia'  => $dt('fecha_comunicacion_familia'),
-            'derivacion_salud'            => $i('derivacion_salud'),
-            'fecha_derivacion'            => $dt('fecha_derivacion'),
-            'establecimiento_salud'       => $d('establecimiento_salud') ?: null,
-            'profesional_receptor'        => $d('profesional_receptor')  ?: null,
-            'coordinacion_pie'            => $i('coordinacion_pie'),
-            'ajustes_metodologicos'       => $i('ajustes_metodologicos'),
-            'seguimiento_establecido'     => $i('seguimiento_establecido'),
-            'fecha_proximo_seguimiento'   => $dt('fecha_proximo_seguimiento'),
-            'respuesta_salud_recibida'    => $i('respuesta_salud_recibida'),
-            'fecha_respuesta_salud'       => $dt('fecha_respuesta_salud'),
-            'diagnostico_confirmado'      => $i('diagnostico_confirmado'),
-            'observaciones'               => $d('observaciones') ?: null,
-            'completado_por'              => $userId ?: null,
+            'colegio_id'                 => $cid,
+            'alumno_condicion_id'        => $condicionId,
+            'deteccion_registrada'       => pt_bool_post('deteccion_registrada'),
+            'fecha_deteccion'            => pt_fecha_post('fecha_deteccion'),
+            'comunicacion_familia'       => pt_bool_post('comunicacion_familia'),
+            'fecha_comunicacion_familia' => pt_fecha_post('fecha_comunicacion_familia'),
+            'derivacion_salud'           => pt_bool_post('derivacion_salud'),
+            'fecha_derivacion'           => pt_fecha_post('fecha_derivacion'),
+            'establecimiento_salud'      => $d('establecimiento_salud') ?: null,
+            'profesional_receptor'       => $d('profesional_receptor') ?: null,
+            'coordinacion_pie'           => pt_bool_post('coordinacion_pie'),
+            'ajustes_metodologicos'      => pt_bool_post('ajustes_metodologicos'),
+            'seguimiento_establecido'    => pt_bool_post('seguimiento_establecido'),
+            'fecha_proximo_seguimiento'  => pt_fecha_post('fecha_proximo_seguimiento'),
+            'respuesta_salud_recibida'   => pt_bool_post('respuesta_salud_recibida'),
+            'fecha_respuesta_salud'      => pt_fecha_post('fecha_respuesta_salud'),
+            'diagnostico_confirmado'     => pt_bool_post('diagnostico_confirmado'),
+            'observaciones'              => $d('observaciones') ?: null,
+            'completado_por'             => $userId ?: null,
         ];
 
-        // Calcular estado automático
-        $pasos = array_sum([$data['deteccion_registrada'],$data['comunicacion_familia'],
-            $data['derivacion_salud'],$data['coordinacion_pie'],
-            $data['ajustes_metodologicos'],$data['seguimiento_establecido']]);
-        $data['estado_protocolo'] = $data['diagnostico_confirmado'] ? 'completado'
+        if ($data['derivacion_salud'] === 1) {
+            if ($data['fecha_derivacion'] === null) {
+                throw new RuntimeException('Debe indicar fecha de derivación a salud.');
+            }
+            if ($data['establecimiento_salud'] === null) {
+                throw new RuntimeException('Debe indicar el establecimiento de salud receptor.');
+            }
+        }
+
+        if ($data['respuesta_salud_recibida'] === 1 && $data['fecha_respuesta_salud'] === null) {
+            throw new RuntimeException('Debe indicar fecha de respuesta de salud.');
+        }
+
+        if ($data['seguimiento_establecido'] === 1 && $data['fecha_proximo_seguimiento'] === null) {
+            throw new RuntimeException('Debe indicar fecha de próximo seguimiento.');
+        }
+
+        $pasos = array_sum([
+            $data['deteccion_registrada'],
+            $data['comunicacion_familia'],
+            $data['derivacion_salud'],
+            $data['coordinacion_pie'],
+            $data['ajustes_metodologicos'],
+            $data['seguimiento_establecido'],
+        ]);
+
+        $data['estado_protocolo'] = $data['diagnostico_confirmado'] === 1
+            ? 'completado'
             : ($pasos >= 4 ? 'en_proceso' : ($pasos >= 1 ? 'iniciado' : 'pendiente'));
 
-        // Sincronizar derivación en alumno_condicion_especial
-        if ($data['derivacion_salud'] && $condicionId) {
-            $pdo->prepare("UPDATE alumno_condicion_especial
-                SET derivado_salud=1, fecha_derivacion=?, destino_derivacion=?, estado_derivacion='pendiente'
-                WHERE id=? AND colegio_id=?")
-                ->execute([$data['fecha_derivacion'], $data['establecimiento_salud'], $condicionId, $cid]);
+        $pdo->beginTransaction();
+
+        if ($data['derivacion_salud'] === 1) {
+            $pdo->prepare("\n                UPDATE alumno_condicion_especial\n                SET derivado_salud = 1,\n                    fecha_derivacion = ?,\n                    destino_derivacion = ?,\n                    estado_derivacion = CASE\n                        WHEN estado_derivacion IS NULL OR estado_derivacion = '' THEN 'pendiente'\n                        ELSE estado_derivacion\n                    END,\n                    updated_at = NOW()\n                WHERE id = ? AND colegio_id = ? AND alumno_id = ?\n            ")->execute([$data['fecha_derivacion'], $data['establecimiento_salud'], $condicionId, $cid, $alumnoId]);
+
+            $pdo->prepare("\n                UPDATE alumnos\n                SET derivado_salud_tea = 1,\n                    fecha_derivacion_tea = ?,\n                    destino_derivacion_tea = ?,\n                    estado_derivacion_tea = CASE\n                        WHEN estado_derivacion_tea IS NULL OR estado_derivacion_tea = '' THEN 'pendiente'\n                        ELSE estado_derivacion_tea\n                    END,\n                    updated_at = NOW()\n                WHERE id = ? AND colegio_id = ?\n            ")->execute([$data['fecha_derivacion'], $data['establecimiento_salud'], $alumnoId, $cid]);
         }
-        // Sincronizar en tabla alumnos
-        if ($data['derivacion_salud']) {
-            $pdo->prepare("UPDATE alumnos SET derivado_salud_tea=1, fecha_derivacion_tea=?,
-                destino_derivacion_tea=? WHERE id=? AND colegio_id=?")
-                ->execute([$data['fecha_derivacion'], $data['establecimiento_salud'], $alumnoId, $cid]);
+
+        if ($data['diagnostico_confirmado'] === 1) {
+            $pdo->prepare("\n                UPDATE alumno_condicion_especial\n                SET estado_diagnostico = 'confirmado',\n                    fecha_respuesta_salud = COALESCE(?, fecha_respuesta_salud),\n                    updated_at = NOW()\n                WHERE id = ? AND colegio_id = ? AND alumno_id = ?\n            ")->execute([$data['fecha_respuesta_salud'], $condicionId, $cid, $alumnoId]);
+
+            $pdo->prepare("\n                UPDATE alumnos\n                SET diagnostico_tea = 'confirmado',\n                    updated_at = NOW()\n                WHERE id = ? AND colegio_id = ?\n            ")->execute([$alumnoId, $cid]);
+        }
+
+        if ($data['ajustes_metodologicos'] === 1) {
+            $pdo->prepare("\n                UPDATE alumno_condicion_especial\n                SET requiere_ajustes = 1, ajustes_aplicados = 1, updated_at = NOW()\n                WHERE id = ? AND colegio_id = ? AND alumno_id = ?\n            ")->execute([$condicionId, $cid, $alumnoId]);
+
+            $pdo->prepare("\n                UPDATE alumnos\n                SET requiere_ajustes_razonables = 1, updated_at = NOW()\n                WHERE id = ? AND colegio_id = ?\n            ")->execute([$alumnoId, $cid]);
         }
 
         if ($protocolo) {
             $sets = array_map(fn($k) => "`$k` = ?", array_keys($data));
             $sets[] = 'updated_at = NOW()';
             $vals   = array_values($data);
-            $vals[] = $protocolo['id'];
-            $pdo->prepare('UPDATE caso_protocolo_tea SET ' . implode(',', $sets) . ' WHERE id = ?')
+            $vals[] = (int)$protocolo['id'];
+            $vals[] = $cid;
+            $pdo->prepare('UPDATE caso_protocolo_tea SET ' . implode(', ', $sets) . ' WHERE id = ? AND colegio_id = ?')
                 ->execute($vals);
+            $protocoloId = (int)$protocolo['id'];
         } else {
             $cols = array_keys($data);
             $vals = array_values($data);
-            $pdo->prepare('INSERT INTO caso_protocolo_tea (' . implode(',', array_map(fn($c)=>"`$c`",$cols)) . ')
-                VALUES (' . implode(',', array_fill(0, count($vals), '?')) . ')')
+            $pdo->prepare('INSERT INTO caso_protocolo_tea (' . implode(',', array_map(fn($c) => "`$c`", $cols)) . ')\n                VALUES (' . implode(',', array_fill(0, count($vals), '?')) . ')')
                 ->execute($vals);
+            $protocoloId = (int)$pdo->lastInsertId();
         }
 
+        $pdo->commit();
+
+        registrar_bitacora(
+            'inclusion',
+            $protocolo ? 'actualizar_protocolo_tea' : 'crear_protocolo_tea',
+            'caso_protocolo_tea',
+            $protocoloId,
+            'Protocolo TEA actualizado para alumno ID ' . $alumnoId . ' (' . $pasos . '/6 pasos).'
+        );
+
         $msgOk = 'Protocolo guardado correctamente.';
-        // Reload protocolo
+
+        $sp = $pdo->prepare("\n            SELECT *\n            FROM caso_protocolo_tea\n            WHERE colegio_id = ? AND alumno_condicion_id = ?\n            ORDER BY id DESC\n            LIMIT 1\n        ");
         $sp->execute([$cid, $condicionId]);
         $protocolo = $sp->fetch() ?: null;
-
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $msgErr = 'Error al guardar: ' . $e->getMessage();
     }
 }

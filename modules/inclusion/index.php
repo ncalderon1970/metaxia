@@ -10,8 +10,9 @@ Auth::requireLogin();
 if (!Auth::canOperate()) { http_response_code(403); exit('Acceso no autorizado.'); }
 
 $pdo  = DB::conn();
-$user = Auth::user();
+$user = Auth::user() ?? [];
 $cid  = (int)($user['colegio_id'] ?? 0);
+if ($cid <= 0 && !Auth::isSuperAdmin()) { http_response_code(403); exit('Colegio no determinado.'); }
 
 // Filtros
 $filtroTipo   = trim((string)($_GET['tipo']   ?? ''));
@@ -28,15 +29,15 @@ try {
     $stmtK = $pdo->prepare("
         SELECT
             COUNT(DISTINCT ace.alumno_id)                                             AS total,
-            SUM(ace.tipo_condicion LIKE 'tea%')                                       AS tea,
-            SUM(ace.tiene_pie = 1)                                                    AS pie,
-            SUM(ace.derivado_salud = 1)                                               AS derivados,
-            SUM(ace.tipo_condicion LIKE 'tea%' AND ace.derivado_salud = 0
-                AND ace.estado_diagnostico IN ('sospecha','en_proceso'))               AS sin_derivar,
-            SUM(ace.estado_diagnostico = 'confirmado')                                AS confirmados,
-            SUM(ace.estado_diagnostico = 'en_proceso')                                AS en_proceso,
-            SUM(ace.tiene_certificado = 1)                                            AS con_cert,
-            SUM(ace.requiere_ajustes = 1)                                             AS ajustes
+            COALESCE(SUM(ace.tipo_condicion LIKE 'tea%'), 0)                           AS tea,
+            COALESCE(SUM(ace.tiene_pie = 1), 0)                                        AS pie,
+            COALESCE(SUM(ace.derivado_salud = 1), 0)                                   AS derivados,
+            COALESCE(SUM(ace.tipo_condicion LIKE 'tea%' AND ace.derivado_salud = 0
+                AND ace.estado_diagnostico IN ('sospecha','en_proceso')), 0)           AS sin_derivar,
+            COALESCE(SUM(ace.estado_diagnostico = 'confirmado'), 0)                    AS confirmados,
+            COALESCE(SUM(ace.estado_diagnostico = 'en_proceso'), 0)                    AS en_proceso,
+            COALESCE(SUM(ace.tiene_certificado = 1), 0)                                AS con_cert,
+            COALESCE(SUM(ace.requiere_ajustes = 1), 0)                                 AS ajustes
         FROM alumno_condicion_especial ace
         WHERE ace.colegio_id = ? AND ace.activo = 1
     ");
@@ -64,10 +65,12 @@ if ($filtroEstado !== '') {
 }
 
 if ($buscar !== '') {
-    $like = '%' . $buscar . '%';
-    $where[] = "(CONCAT_WS(' ',a.nombres,a.apellido_paterno,a.apellido_materno) LIKE ?
-                 OR a.run LIKE ? OR a.curso LIKE ?)";
-    $params[] = $like; $params[] = $like; $params[] = $like;
+    $like = '%' . mb_strtoupper($buscar, 'UTF-8') . '%';
+    $runLike = '%' . mb_strtoupper(str_replace(['.', '-', ' '], '', $buscar), 'UTF-8') . '%';
+    $where[] = "(UPPER(CONCAT_WS(' ', a.nombres, a.apellido_paterno, a.apellido_materno)) COLLATE utf8mb4_unicode_ci LIKE ?
+                 OR UPPER(REPLACE(REPLACE(REPLACE(a.run,'.',''),'-',''),' ','')) COLLATE utf8mb4_unicode_ci LIKE ?
+                 OR UPPER(COALESCE(a.curso,'')) COLLATE utf8mb4_unicode_ci LIKE ?)";
+    $params[] = $like; $params[] = $runLike; $params[] = $like;
 }
 
 $alumnos = [];
@@ -93,8 +96,8 @@ try {
             ace.created_at,
             COALESCE(cat.nombre, ace.tipo_condicion) AS condicion_nombre
         FROM alumno_condicion_especial ace
-        INNER JOIN alumnos a             ON a.id  = ace.alumno_id
-        LEFT  JOIN catalogo_condicion_especial cat ON cat.codigo = ace.tipo_condicion
+        INNER JOIN alumnos a             ON a.id  = ace.alumno_id AND a.colegio_id = ace.colegio_id
+        LEFT  JOIN catalogo_condicion_especial cat ON cat.codigo = ace.tipo_condicion AND cat.activo = 1
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             (ace.tipo_condicion LIKE 'tea%' AND ace.derivado_salud = 0
