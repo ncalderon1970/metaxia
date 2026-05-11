@@ -15,6 +15,8 @@ require_once dirname(__DIR__, 2) . '/core/helpers.php';
 require_once __DIR__ . '/includes/ver_helpers.php';
 require_once __DIR__ . '/includes/ver_queries.php';
 
+require_once __DIR__ . '/includes/snapshot_report_helpers.php';
+
 Auth::requireLogin();
 
 $pdo       = DB::conn();
@@ -61,8 +63,11 @@ $colegio = $stmtCol->fetch() ?: [];
 // ══════════════════════════════════════════════════════════════
 $stmtP = $pdo->prepare("
     SELECT cp.*,
-           a.fecha_nacimiento, a.curso, a.condicion_especial,
-           a.diagnostico_tea, a.tiene_pie
+           COALESCE(cp.snapshot_fecha_nacimiento, a.fecha_nacimiento) AS fecha_nacimiento,
+           COALESCE(NULLIF(cp.snapshot_curso,''), a.curso) AS curso,
+           cp.snapshot_edad, cp.snapshot_anio_escolar, cp.snapshot_nombre_social,
+           cp.snapshot_sexo, cp.snapshot_genero,
+           a.condicion_especial, a.diagnostico_tea, a.tiene_pie
     FROM caso_participantes cp
     LEFT JOIN alumnos a ON a.id = cp.persona_id AND cp.tipo_persona = 'alumno'
     WHERE cp.caso_id = ?
@@ -75,8 +80,8 @@ $participantes = $stmtP->fetchAll();
 // aparece una sola vez con todos sus roles. Clave = RUN normalizado ó nombre en mayúsculas.
 $participantesAgrupados = [];
 foreach ($participantes as $p) {
-    $run    = trim((string)($p['run'] ?? ''));
-    $nombre = mb_strtoupper(trim((string)($p['nombre_referencial'] ?? '')), 'UTF-8');
+    $run    = metis_snapshot_run($p);
+    $nombre = mb_strtoupper(metis_snapshot_nombre($p), 'UTF-8');
     $clave  = ($run !== '' && $run !== '0-0')
             ? 'run:' . preg_replace('/[.\-\s]/', '', $run)
             : 'nom:' . preg_replace('/\s+/', ' ', $nombre);
@@ -839,7 +844,7 @@ $secNum     = 1; // contador de secciones
                         ?>
                             <span class="inf-rol-badge <?= $rCss ?>"><?= e(inf_label($rU)) ?></span>
                         <?php endforeach; ?>
-                        <span><?= e((string)($p['nombre_referencial'] ?? 'N/N')) ?></span>
+                        <span><?= e(metis_snapshot_nombre($p)) ?></span>
                         <?php if (!empty($p['run']) && $p['run'] !== '0-0'): ?>
                             <span style="color:#64748b;font-weight:400;font-size:.76rem;">
                                 RUN: <?= e((string)$p['run']) ?>
@@ -849,8 +854,8 @@ $secNum     = 1; // contador de secciones
                     <div class="inf-part-body">
                         <table class="inf-table" style="font-size:.79rem;">
                             <tr><th>Tipo</th><td><?= e(inf_label((string)($p['tipo_persona'] ?? ''))) ?></td></tr>
-                            <?php if (!empty($p['curso'])): ?>
-                            <tr><th>Curso</th><td><?= e((string)$p['curso']) ?></td></tr>
+                            <?php if (metis_snapshot_curso($p) !== '—'): ?>
+                            <tr><th>Curso</th><td><?= e(metis_snapshot_curso($p)) ?></td></tr>
                             <?php endif; ?>
                             <?php if (!empty($p['fecha_nacimiento'])): ?>
                             <tr><th>Fecha nacimiento</th><td><?= inf_fecha((string)$p['fecha_nacimiento']) ?></td></tr>
