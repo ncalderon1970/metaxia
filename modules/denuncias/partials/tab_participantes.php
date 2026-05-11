@@ -24,6 +24,19 @@ $puedeOperarParticipantes = Auth::canOperate()
     || Auth::can('gestionar_casos')
     || Auth::can('crear_denuncia')
     || Auth::can('gestionar_comunidad');
+
+$fechaReferenciaIntervinientes = date('Y-m-d');
+if (!empty($caso['fecha_hechos'])) {
+    $fechaReferenciaIntervinientes = date('Y-m-d', strtotime((string)$caso['fecha_hechos']));
+} elseif (!empty($caso['fecha_hora_incidente'])) {
+    $fechaReferenciaIntervinientes = date('Y-m-d', strtotime((string)$caso['fecha_hora_incidente']));
+} elseif (!empty($caso['fecha_ingreso'])) {
+    $fechaReferenciaIntervinientes = date('Y-m-d', strtotime((string)$caso['fecha_ingreso']));
+} elseif (!empty($caso['created_at'])) {
+    $fechaReferenciaIntervinientes = date('Y-m-d', strtotime((string)$caso['created_at']));
+}
+
+$anioEscolarIntervinientes = (int)date('Y', strtotime($fechaReferenciaIntervinientes));
 ?>
 
     <section class="exp-card">
@@ -123,7 +136,8 @@ $puedeOperarParticipantes = Auth::canOperate()
         <div class="exp-title">Agregar intervinientes</div>
 
         <div class="exp-help">
-            Busca por RUN o nombre en la base institucional de alumnos, apoderados, docentes o asistentes.
+            Busca por RUN o nombre en la base institucional anual de alumnos, apoderados, docentes o asistentes.
+            La búsqueda usa el año escolar <strong><?= (int)$anioEscolarIntervinientes ?></strong>, asociado a la fecha de referencia del caso.
             Si la persona no aparece, selecciona <strong>Externo / no vinculado</strong> e ingrésala manualmente.
         </div>
 
@@ -152,6 +166,21 @@ $puedeOperarParticipantes = Auth::canOperate()
             <input type="hidden" name="_accion"       value="agregar_participante">
             <input type="hidden" name="persona_id"    id="vpPersonaId"   value="">
             <input type="hidden" name="tipo_persona"  id="vpTipoPersona" value="alumno">
+            <input type="hidden" name="persona_anual_id" id="vpPersonaAnualId" value="">
+            <input type="hidden" name="persona_anual_tipo" id="vpPersonaAnualTipo" value="">
+            <input type="hidden" name="anio_escolar" id="vpAnioEscolar" value="<?= (int)$anioEscolarIntervinientes ?>">
+            <input type="hidden" name="snapshot_run" id="vpSnapshotRun" value="">
+            <input type="hidden" name="snapshot_nombres" id="vpSnapshotNombres" value="">
+            <input type="hidden" name="snapshot_apellido_paterno" id="vpSnapshotApellidoPaterno" value="">
+            <input type="hidden" name="snapshot_apellido_materno" id="vpSnapshotApellidoMaterno" value="">
+            <input type="hidden" name="snapshot_nombre_social" id="vpSnapshotNombreSocial" value="">
+            <input type="hidden" name="snapshot_sexo" id="vpSnapshotSexo" value="">
+            <input type="hidden" name="snapshot_genero" id="vpSnapshotGenero" value="">
+            <input type="hidden" name="snapshot_fecha_nacimiento" id="vpSnapshotFechaNacimiento" value="">
+            <input type="hidden" name="snapshot_edad" id="vpSnapshotEdad" value="">
+            <input type="hidden" name="snapshot_curso" id="vpSnapshotCurso" value="">
+            <input type="hidden" name="snapshot_anio_escolar" id="vpSnapshotAnioEscolar" value="<?= (int)$anioEscolarIntervinientes ?>">
+            <input type="hidden" name="snapshot_fecha_referencia" id="vpSnapshotFechaReferencia" value="<?= e($fechaReferenciaIntervinientes) ?>">
 
             <div class="exp-grid-3">
                 <div class="exp-field-full" style="grid-column:1/-1;">
@@ -249,6 +278,21 @@ $puedeOperarParticipantes = Auth::canOperate()
     var inpRun      = document.getElementById('vpRun');
     var inpPersonaId= document.getElementById('vpPersonaId');
     var inpTipoP    = document.getElementById('vpTipoPersona');
+    var inpPersonaAnualId = document.getElementById('vpPersonaAnualId');
+    var inpPersonaAnualTipo = document.getElementById('vpPersonaAnualTipo');
+    var inpAnioEscolar = document.getElementById('vpAnioEscolar');
+    var snapRun = document.getElementById('vpSnapshotRun');
+    var snapNombres = document.getElementById('vpSnapshotNombres');
+    var snapApellidoPaterno = document.getElementById('vpSnapshotApellidoPaterno');
+    var snapApellidoMaterno = document.getElementById('vpSnapshotApellidoMaterno');
+    var snapNombreSocial = document.getElementById('vpSnapshotNombreSocial');
+    var snapSexo = document.getElementById('vpSnapshotSexo');
+    var snapGenero = document.getElementById('vpSnapshotGenero');
+    var snapFechaNacimiento = document.getElementById('vpSnapshotFechaNacimiento');
+    var snapEdad = document.getElementById('vpSnapshotEdad');
+    var snapCurso = document.getElementById('vpSnapshotCurso');
+    var snapAnioEscolar = document.getElementById('vpSnapshotAnioEscolar');
+    var snapFechaReferencia = document.getElementById('vpSnapshotFechaReferencia');
 
     var timerBusq = null;
     var modoManual = false;
@@ -261,6 +305,20 @@ $puedeOperarParticipantes = Auth::canOperate()
         inpNombre.value    = '';
         inpRun.value       = '';
         inpPersonaId.value = '';
+        inpPersonaAnualId.value = '';
+        inpPersonaAnualTipo.value = '';
+        snapRun.value = '';
+        snapNombres.value = '';
+        snapApellidoPaterno.value = '';
+        snapApellidoMaterno.value = '';
+        snapNombreSocial.value = '';
+        snapSexo.value = '';
+        snapGenero.value = '';
+        snapFechaNacimiento.value = '';
+        snapEdad.value = '';
+        snapCurso.value = '';
+        snapAnioEscolar.value = inpAnioEscolar.value || '';
+        snapFechaReferencia.value = '<?= e($fechaReferenciaIntervinientes) ?>';
         inpBusq.value      = '';
         fuenteBadge.style.display = 'none';
         inpNombre.readOnly = false;
@@ -271,11 +329,25 @@ $puedeOperarParticipantes = Auth::canOperate()
     function seleccionar(item) {
         inpNombre.value    = item.nombre  || '';
         inpRun.value       = item.run     || '0-0';
-        inpPersonaId.value = item.id      || '';
+        inpPersonaId.value = item.persona_id || '';
+        inpPersonaAnualId.value = item.persona_anual_id || item.id || '';
+        inpPersonaAnualTipo.value = item.persona_anual_tipo || item.tipo || inpTipo.value;
         inpTipoP.value     = item.tipo    || inpTipo.value;
+        snapRun.value = item.snapshot_run || item.run || '0-0';
+        snapNombres.value = item.snapshot_nombres || '';
+        snapApellidoPaterno.value = item.snapshot_apellido_paterno || '';
+        snapApellidoMaterno.value = item.snapshot_apellido_materno || '';
+        snapNombreSocial.value = item.snapshot_nombre_social || item.nombre_social || '';
+        snapSexo.value = item.snapshot_sexo || item.sexo || '';
+        snapGenero.value = item.snapshot_genero || item.genero || '';
+        snapFechaNacimiento.value = item.snapshot_fecha_nacimiento || item.fecha_nacimiento || '';
+        snapEdad.value = item.snapshot_edad || item.edad || '';
+        snapCurso.value = item.snapshot_curso || item.curso || '';
+        snapAnioEscolar.value = item.snapshot_anio_escolar || item.anio_escolar || inpAnioEscolar.value || '';
+        snapFechaReferencia.value = item.snapshot_fecha_referencia || '<?= e($fechaReferenciaIntervinientes) ?>';
         inpNombre.readOnly = true;
         inpRun.readOnly    = true;
-        fuenteTexto.textContent = 'Vinculado: ' + (item.nombre || '') + ' · ' + (item.tipo_label || item.tipo || '');
+        fuenteTexto.textContent = 'Vinculado anual: ' + (item.nombre || '') + ' · ' + (item.tipo_label || item.tipo || '') + (item.anio_escolar ? ' · Año ' + item.anio_escolar : '');
         fuenteBadge.style.display = 'block';
         resultados.style.display  = 'none';
         inpBusq.value = '';
@@ -292,7 +364,7 @@ $puedeOperarParticipantes = Auth::canOperate()
         if (q.length < 2) { resultados.style.display = 'none'; return; }
 
         spinner.style.display = 'inline';
-        fetch(ajaxUrl + '&tipo=' + encodeURIComponent(tipo) + '&q=' + encodeURIComponent(q))
+        fetch(ajaxUrl + '&tipo=' + encodeURIComponent(tipo) + '&anio_escolar=' + encodeURIComponent(inpAnioEscolar.value || '') + '&q=' + encodeURIComponent(q))
             .then(function(r){ return r.json(); })
             .then(function(data){
                 spinner.style.display = 'none';
@@ -314,7 +386,9 @@ $puedeOperarParticipantes = Auth::canOperate()
                         '<div>' +
                             '<div class="vp-result-nombre">' + escHtml(item.nombre) + '</div>' +
                             '<div class="vp-result-meta">RUN ' + escHtml(item.run || '0-0') +
-                            (item.curso ? ' · ' + escHtml(item.curso) : '') + '</div>' +
+                            (item.curso ? ' · ' + escHtml(item.curso) : '') +
+                            (item.edad ? ' · ' + escHtml(item.edad) + ' años' : '') +
+                            (item.anio_escolar ? ' · Año ' + escHtml(item.anio_escolar) : '') + '</div>' +
                         '</div>' +
                         '<span class="vp-result-tipo">' + escHtml(item.tipo_label || item.tipo || '') + '</span>';
                     div.addEventListener('click', function(){ seleccionar(item); });
@@ -345,6 +419,8 @@ $puedeOperarParticipantes = Auth::canOperate()
             inpNombre.readOnly = false;
             inpRun.readOnly    = false;
             inpTipoP.value     = 'externo';
+            inpPersonaAnualId.value = '';
+            inpPersonaAnualTipo.value = '';
             resultados.style.display = 'none';
         }
     });
