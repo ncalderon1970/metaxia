@@ -1545,6 +1545,8 @@ try {
         if ($accion === 'agregar_participante') {
             $tipoPersona = clean((string)($_POST['tipo_persona'] ?? 'externo'));
             $personaId = (int)($_POST['persona_id'] ?? 0);
+            $personaAnualId = (int)($_POST['persona_anual_id'] ?? 0);
+            $personaAnualTipo = clean((string)($_POST['persona_anual_tipo'] ?? ''));
             $nombre = clean((string)($_POST['nombre_referencial'] ?? ''));
             $run = cleanRun((string)($_POST['run'] ?? ''));
             $rolEnCaso = clean((string)($_POST['rol_en_caso'] ?? 'involucrado'));
@@ -1552,9 +1554,26 @@ try {
             $observacion = clean((string)($_POST['observacion'] ?? ''));
             $observacionReserva = clean((string)($_POST['observacion_reserva'] ?? ''));
 
+            $snapshotRun = cleanRun((string)($_POST['snapshot_run'] ?? ''));
+            $snapshotNombres = clean((string)($_POST['snapshot_nombres'] ?? ''));
+            $snapshotApellidoPaterno = clean((string)($_POST['snapshot_apellido_paterno'] ?? ''));
+            $snapshotApellidoMaterno = clean((string)($_POST['snapshot_apellido_materno'] ?? ''));
+            $snapshotNombreSocial = clean((string)($_POST['snapshot_nombre_social'] ?? ''));
+            $snapshotSexo = clean((string)($_POST['snapshot_sexo'] ?? ''));
+            $snapshotGenero = clean((string)($_POST['snapshot_genero'] ?? ''));
+            $snapshotFechaNacimiento = clean((string)($_POST['snapshot_fecha_nacimiento'] ?? ''));
+            $snapshotEdad = (int)($_POST['snapshot_edad'] ?? 0);
+            $snapshotCurso = clean((string)($_POST['snapshot_curso'] ?? ''));
+            $snapshotAnioEscolar = (int)($_POST['snapshot_anio_escolar'] ?? $_POST['anio_escolar'] ?? 0);
+            $snapshotFechaReferencia = clean((string)($_POST['snapshot_fecha_referencia'] ?? ''));
+
             $tiposPermitidos = ['alumno', 'apoderado', 'docente', 'asistente', 'externo'];
             if (!in_array($tipoPersona, $tiposPermitidos, true)) {
                 $tipoPersona = 'externo';
+            }
+
+            if ($personaAnualTipo !== '' && !in_array($personaAnualTipo, ['alumno', 'apoderado', 'docente', 'asistente'], true)) {
+                $personaAnualTipo = '';
             }
 
             $rolesPermitidos = ['victima', 'denunciante', 'denunciado', 'testigo', 'involucrado'];
@@ -1563,50 +1582,40 @@ try {
             }
 
             $personaIdSql = null;
+            $personaAnualIdSql = null;
+            $personaAnualTipoSql = null;
             $identidadConfirmada = 0;
             $fechaIdentificacion = null;
             $identificadoPor = null;
             $observacionIdentificacion = null;
 
-            if ($personaId > 0 && $tipoPersona !== 'externo') {
-                $sqlPersona = match ($tipoPersona) {
-                    'alumno' => "
-                        SELECT id, run, nombres, apellido_paterno, apellido_materno, NULL AS nombre
-                        FROM alumnos
-                        WHERE id = ? AND colegio_id = ? AND activo = 1
-                        LIMIT 1
-                    ",
-                    'apoderado' => "
-                        SELECT id, run, nombres, apellido_paterno, apellido_materno, nombre
-                        FROM apoderados
-                        WHERE id = ? AND colegio_id = ? AND activo = 1
-                        LIMIT 1
-                    ",
-                    'docente' => "
-                        SELECT id, run, nombres, apellido_paterno, apellido_materno, nombre
-                        FROM docentes
-                        WHERE id = ? AND colegio_id = ? AND activo = 1
-                        LIMIT 1
-                    ",
-                    'asistente' => "
-                        SELECT id, run, nombres, apellido_paterno, apellido_materno, nombre
-                        FROM asistentes
-                        WHERE id = ? AND colegio_id = ? AND activo = 1
-                        LIMIT 1
-                    ",
+            if ($personaAnualId > 0 && $personaAnualTipo !== '') {
+                $tablaAnual = match ($personaAnualTipo) {
+                    'alumno' => 'alumnos_anual',
+                    'apoderado' => 'apoderados_anual',
+                    'docente' => 'docentes_anual',
+                    'asistente' => 'asistentes_anual',
                     default => null,
                 };
 
-                if ($sqlPersona === null) {
-                    throw new RuntimeException('Tipo de persona no válido.');
+                $legacyColumn = match ($personaAnualTipo) {
+                    'alumno' => 'alumno_legacy_id',
+                    'apoderado' => 'apoderado_legacy_id',
+                    'docente' => 'docente_legacy_id',
+                    'asistente' => 'asistente_legacy_id',
+                    default => null,
+                };
+
+                if ($tablaAnual === null || $legacyColumn === null) {
+                    throw new RuntimeException('Tipo anual de persona no válido.');
                 }
 
-                $stmtPersona = $pdo->prepare($sqlPersona);
-                $stmtPersona->execute([$personaId, $colegioId]);
+                $stmtPersona = $pdo->prepare("\n                    SELECT\n                        id,\n                        {$legacyColumn} AS legacy_id,\n                        run,\n                        nombres,\n                        apellido_paterno,\n                        apellido_materno,\n                        " . ($personaAnualTipo === 'alumno' ? "'' AS nombre," : "COALESCE(nombre, '') AS nombre,") . "\n                        fecha_nacimiento,\n                        sexo,\n                        genero,\n                        nombre_social,\n                        anio_escolar,\n                        " . ($personaAnualTipo === 'alumno' ? "COALESCE(curso, '') AS curso," : "COALESCE(cargo, '') AS curso,") . "\n                        vigente\n                    FROM {$tablaAnual}\n                    WHERE id = ?\n                      AND colegio_id = ?\n                      AND vigente = 1\n                    LIMIT 1\n                ");
+                $stmtPersona->execute([$personaAnualId, $colegioId]);
                 $persona = $stmtPersona->fetch(PDO::FETCH_ASSOC);
 
                 if (!$persona) {
-                    throw new RuntimeException('La persona seleccionada no pertenece al establecimiento o no está activa.');
+                    throw new RuntimeException('La persona anual seleccionada no pertenece al establecimiento o no está vigente.');
                 }
 
                 $partesNombre = array_filter([
@@ -1620,34 +1629,74 @@ try {
                     $nombreOficial = trim((string)($persona['nombre'] ?? ''));
                 }
 
-                $nombre = $nombreOficial !== '' ? mb_strtoupper($nombreOficial, 'UTF-8') : 'NN';
+                $nombreSocial = trim((string)($persona['nombre_social'] ?? ''));
+                $nombre = $nombreSocial !== '' ? $nombreSocial : ($nombreOficial !== '' ? mb_strtoupper($nombreOficial, 'UTF-8') : 'NN');
                 $run = cleanRun((string)($persona['run'] ?? '0-0'));
-                $personaIdSql = $personaId;
+
+                $personaIdSql = (int)($persona['legacy_id'] ?? 0) > 0 ? (int)$persona['legacy_id'] : null;
+                $personaAnualIdSql = (int)$persona['id'];
+                $personaAnualTipoSql = $personaAnualTipo;
+                $tipoPersona = $personaAnualTipo;
                 $identidadConfirmada = 1;
                 $fechaIdentificacion = date('Y-m-d H:i:s');
                 $identificadoPor = $userId ?: null;
-                $observacionIdentificacion = 'Vinculado desde comunidad educativa.';
+                $observacionIdentificacion = 'Vinculado desde comunidad educativa anual.';
 
-                $stmtDuplicado = $pdo->prepare("
-                    SELECT COUNT(*)
-                    FROM caso_participantes cp
-                    INNER JOIN casos c ON c.id = cp.caso_id
-                    WHERE cp.caso_id = ?
-                      AND cp.tipo_persona = ?
-                      AND cp.persona_id = ?
-                      AND cp.rol_en_caso = ?
-                      AND c.colegio_id = ?
-                ");
-                $stmtDuplicado->execute([$casoId, $tipoPersona, $personaId, $rolEnCaso, $colegioId]);
+                $snapshotRun = cleanRun((string)($persona['run'] ?? $run));
+                $snapshotNombres = clean((string)($persona['nombres'] ?? ''));
+                $snapshotApellidoPaterno = clean((string)($persona['apellido_paterno'] ?? ''));
+                $snapshotApellidoMaterno = clean((string)($persona['apellido_materno'] ?? ''));
+                $snapshotNombreSocial = clean((string)($persona['nombre_social'] ?? ''));
+                $snapshotSexo = clean((string)($persona['sexo'] ?? ''));
+                $snapshotGenero = clean((string)($persona['genero'] ?? ''));
+                $snapshotFechaNacimiento = clean((string)($persona['fecha_nacimiento'] ?? ''));
+                $snapshotCurso = clean((string)($persona['curso'] ?? ''));
+                $snapshotAnioEscolar = (int)($persona['anio_escolar'] ?? $snapshotAnioEscolar);
+
+                if ($snapshotFechaReferencia === '') {
+                    $snapshotFechaReferencia = date('Y-m-d');
+                    try {
+                        $stmtFechaCaso = $pdo->prepare("\n                            SELECT DATE(COALESCE(fecha_hechos, fecha_hora_incidente, fecha_ingreso, created_at, NOW()))\n                            FROM casos\n                            WHERE id = ?\n                              AND colegio_id = ?\n                            LIMIT 1\n                        ");
+                        $stmtFechaCaso->execute([$casoId, $colegioId]);
+                        $snapshotFechaReferencia = (string)($stmtFechaCaso->fetchColumn() ?: $snapshotFechaReferencia);
+                    } catch (Throwable $e) {
+                        // fallback a fecha actual
+                    }
+                }
+
+                if ($snapshotEdad <= 0 && $snapshotFechaNacimiento !== '' && $snapshotFechaReferencia !== '') {
+                    try {
+                        $snapshotEdad = (int)(new DateTimeImmutable($snapshotFechaNacimiento))->diff(new DateTimeImmutable($snapshotFechaReferencia))->y;
+                    } catch (Throwable $e) {
+                        $snapshotEdad = 0;
+                    }
+                }
+
+                $stmtDuplicado = $pdo->prepare("\n                    SELECT COUNT(*)\n                    FROM caso_participantes cp\n                    INNER JOIN casos c ON c.id = cp.caso_id\n                    WHERE cp.caso_id = ?\n                      AND cp.tipo_persona = ?\n                      AND (\n                            (cp.persona_anual_id = ? AND cp.persona_anual_tipo = ?)\n                         OR (cp.persona_id IS NOT NULL AND cp.persona_id = ?)\n                      )\n                      AND cp.rol_en_caso = ?\n                      AND c.colegio_id = ?\n                ");
+                $stmtDuplicado->execute([
+                    $casoId,
+                    $tipoPersona,
+                    $personaAnualIdSql,
+                    $personaAnualTipoSql,
+                    $personaIdSql ?: 0,
+                    $rolEnCaso,
+                    $colegioId,
+                ]);
 
                 if ((int)$stmtDuplicado->fetchColumn() > 0) {
                     throw new RuntimeException('Esta persona ya está registrada con el mismo rol en el caso.');
                 }
             } else {
                 $personaIdSql = null;
+                $personaAnualIdSql = null;
+                $personaAnualTipoSql = null;
                 $nombre = $nombre !== '' ? mb_strtoupper($nombre, 'UTF-8') : 'NN';
                 $run = $run !== '' ? $run : '0-0';
-                $observacionIdentificacion = 'Participante pendiente de vinculación con comunidad educativa.';
+                $snapshotRun = $snapshotRun !== '' ? $snapshotRun : $run;
+                $snapshotNombres = $snapshotNombres !== '' ? $snapshotNombres : $nombre;
+                $snapshotAnioEscolar = $snapshotAnioEscolar > 0 ? $snapshotAnioEscolar : (int)date('Y');
+                $snapshotFechaReferencia = $snapshotFechaReferencia !== '' ? $snapshotFechaReferencia : date('Y-m-d');
+                $observacionIdentificacion = 'Interviniente externo o pendiente de vinculación con comunidad educativa anual.';
             }
 
             if ($nombre === '') {
@@ -1659,70 +1708,65 @@ try {
             }
 
             if ($nombre === 'NN' && $run === '0-0') {
-                throw new RuntimeException('Debe ingresar nombre o RUN del participante.');
+                throw new RuntimeException('Debe ingresar nombre o RUN del interviniente.');
             }
 
-            $stmt = $pdo->prepare("
-                INSERT INTO caso_participantes (
-                    caso_id,
-                    tipo_persona,
-                    persona_id,
-                    nombre_referencial,
-                    run,
-                    identidad_confirmada,
-                    fecha_identificacion,
-                    identificado_por,
-                    rol_en_caso,
-                    solicita_reserva_identidad,
-                    observacion_reserva,
-                    observacion,
-                    observacion_identificacion,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            ");
-            $stmt->execute([
-                $casoId,
-                $tipoPersona,
-                $personaIdSql,
-                $nombre,
-                $run,
-                $identidadConfirmada,
-                $fechaIdentificacion,
-                $identificadoPor,
-                $rolEnCaso,
-                $reserva,
-                $observacionReserva !== '' ? $observacionReserva : null,
-                $observacion !== '' ? $observacion : null,
-                $observacionIdentificacion,
-            ]);
-
-            $participanteId = (int)$pdo->lastInsertId();
-
+            $pdo->beginTransaction();
             try {
-                $stmt = $pdo->prepare("
-                    INSERT INTO caso_historial (
-                        caso_id,
-                        tipo_evento,
-                        titulo,
-                        detalle,
-                        user_id
-                    ) VALUES (?, 'participante', 'Participante agregado', ?, ?)
-                ");
+                $stmt = $pdo->prepare("\n                    INSERT INTO caso_participantes (\n                        caso_id,\n                        tipo_persona,\n                        persona_id,\n                        persona_anual_id,\n                        persona_anual_tipo,\n                        nombre_referencial,\n                        run,\n                        snapshot_run,\n                        snapshot_nombres,\n                        snapshot_apellido_paterno,\n                        snapshot_apellido_materno,\n                        snapshot_nombre_social,\n                        snapshot_sexo,\n                        snapshot_genero,\n                        snapshot_fecha_nacimiento,\n                        snapshot_edad,\n                        snapshot_curso,\n                        snapshot_anio_escolar,\n                        snapshot_fecha_referencia,\n                        identidad_confirmada,\n                        fecha_identificacion,\n                        identificado_por,\n                        rol_en_caso,\n                        solicita_reserva_identidad,\n                        observacion_reserva,\n                        observacion,\n                        observacion_identificacion,\n                        created_at\n                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())\n                ");
                 $stmt->execute([
                     $casoId,
-                    'Se agregó participante: ' . $nombre . ' (' . $rolEnCaso . ')' . ($identidadConfirmada ? ' con identidad confirmada.' : ' pendiente de vinculación.'),
+                    $tipoPersona,
+                    $personaIdSql,
+                    $personaAnualIdSql,
+                    $personaAnualTipoSql,
+                    $nombre,
+                    $run,
+                    $snapshotRun !== '' ? $snapshotRun : $run,
+                    $snapshotNombres !== '' ? $snapshotNombres : $nombre,
+                    $snapshotApellidoPaterno !== '' ? $snapshotApellidoPaterno : null,
+                    $snapshotApellidoMaterno !== '' ? $snapshotApellidoMaterno : null,
+                    $snapshotNombreSocial !== '' ? $snapshotNombreSocial : null,
+                    $snapshotSexo !== '' ? $snapshotSexo : null,
+                    $snapshotGenero !== '' ? $snapshotGenero : null,
+                    $snapshotFechaNacimiento !== '' ? $snapshotFechaNacimiento : null,
+                    $snapshotEdad > 0 ? $snapshotEdad : null,
+                    $snapshotCurso !== '' ? $snapshotCurso : null,
+                    $snapshotAnioEscolar > 0 ? $snapshotAnioEscolar : null,
+                    $snapshotFechaReferencia !== '' ? $snapshotFechaReferencia : null,
+                    $identidadConfirmada,
+                    $fechaIdentificacion,
+                    $identificadoPor,
+                    $rolEnCaso,
+                    $reserva,
+                    $observacionReserva !== '' ? $observacionReserva : null,
+                    $observacion !== '' ? $observacion : null,
+                    $observacionIdentificacion,
+                ]);
+
+                $participanteId = (int)$pdo->lastInsertId();
+
+                $stmtHist = $pdo->prepare("\n                    INSERT INTO caso_historial (\n                        caso_id,\n                        tipo_evento,\n                        titulo,\n                        detalle,\n                        user_id\n                    ) VALUES (?, 'participante', 'Interviniente agregado', ?, ?)\n                ");
+                $stmtHist->execute([
+                    $casoId,
+                    'Se agregó interviniente: ' . $nombre . ' (' . $rolEnCaso . ')' . ($identidadConfirmada ? ' con identidad anual confirmada.' : ' pendiente de vinculación.'),
                     $userId ?: null,
                 ]);
+
+                $pdo->commit();
             } catch (Throwable $e) {
-                // El historial no debe impedir el registro principal del participante.
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
             }
 
             registrar_bitacora(
                 'denuncias',
-                'agregar_participante',
+                'agregar_interviniente_anual',
                 'caso_participantes',
                 $participanteId,
-                'Participante agregado al caso.'
+                'Interviniente anual agregado al caso.'
             );
 
             caso_redirect($casoId, 'participantes');
