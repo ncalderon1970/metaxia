@@ -1,25 +1,79 @@
 <?php
 declare(strict_types=1);
-require_once dirname(__DIR__, 2) . '/config/app.php';
-require_once dirname(__DIR__, 2) . '/core/DB.php';
-require_once dirname(__DIR__, 2) . '/core/Auth.php';
-require_once dirname(__DIR__, 2) . '/core/CSRF.php';
-require_once dirname(__DIR__, 2) . '/core/helpers.php';
-require_once __DIR__ . '/_comunidad_helpers.php';
-Auth::requireLogin(); com_require_operate();
-$pdo=DB::conn(); $user=Auth::user()??[]; $colegioId=(int)($user['colegio_id']??0); $userId=(int)($user['id']??0);
-$tipo=com_safe_tipo((string)($_POST['tipo']??'alumnos')); $id=(int)($_POST['id']??0);
-try{
- if($_SERVER['REQUEST_METHOD']!=='POST'){http_response_code(405);exit('Método no permitido.');}
- CSRF::requireValid($_POST['_token']??null);
- $row=com_fetch_person($pdo,$tipo,$id,$colegioId); if(!$row) throw new RuntimeException('Registro no encontrado.');
- $run=com_normalize_run((string)($_POST['run']??'')); $nombres=com_upper($_POST['nombres']??''); if(!$nombres) throw new RuntimeException('Debe ingresar nombres.');
- $apellidoP=com_upper($_POST['apellido_paterno']??''); if($tipo==='alumnos'&&!$apellidoP) throw new RuntimeException('Debe ingresar apellido paterno.');
- $apellidoM=com_upper($_POST['apellido_materno']??''); $nombre=trim(implode(' ', array_filter([$nombres,$apellidoP,$apellidoM]))); $activo=((int)($_POST['activo']??1)===1)?1:0;
- $dup=$pdo->prepare("SELECT id FROM {$tipo} WHERE colegio_id=? AND run=? AND id<>? LIMIT 1"); $dup->execute([$colegioId,$run,$id]); if($dup->fetchColumn()) throw new RuntimeException('Ya existe otro registro con ese RUN en este establecimiento.');
- if($tipo==='alumnos'){$sql="UPDATE alumnos SET run=?,nombres=?,apellido_paterno=?,apellido_materno=?,fecha_nacimiento=?,curso=?,genero=?,direccion=?,telefono=?,email=?,observacion=?,activo=?,updated_at=NOW() WHERE id=? AND colegio_id=? LIMIT 1"; $params=[$run,$nombres,$apellidoP,$apellidoM,com_clean($_POST['fecha_nacimiento']??null),com_upper($_POST['curso']??null),com_upper($_POST['genero']??null),com_upper($_POST['direccion']??null),com_upper($_POST['telefono']??null),com_email($_POST['email']??null),com_upper($_POST['observacion']??null),$activo,$id,$colegioId];}
- elseif($tipo==='apoderados'){$sql="UPDATE apoderados SET run=?,nombres=?,apellido_paterno=?,apellido_materno=?,nombre=?,telefono=?,email=?,direccion=?,observacion=?,activo=?,updated_at=NOW() WHERE id=? AND colegio_id=? LIMIT 1"; $params=[$run,$nombres,$apellidoP,$apellidoM,$nombre,com_upper($_POST['telefono']??null),com_email($_POST['email']??null),com_upper($_POST['direccion']??null),com_upper($_POST['observacion']??null),$activo,$id,$colegioId];}
- elseif($tipo==='docentes'){$sql="UPDATE docentes SET run=?,nombres=?,apellido_paterno=?,apellido_materno=?,nombre=?,email=?,telefono=?,cargo=?,activo=?,updated_at=NOW() WHERE id=? AND colegio_id=? LIMIT 1"; $params=[$run,$nombres,$apellidoP,$apellidoM,$nombre,com_email($_POST['email']??null),com_upper($_POST['telefono']??null),com_upper($_POST['cargo']??null),$activo,$id,$colegioId];}
- else{$sql="UPDATE asistentes SET run=?,nombres=?,apellido_paterno=?,apellido_materno=?,nombre=?,cargo=?,email=?,telefono=?,activo=?,updated_at=NOW() WHERE id=? AND colegio_id=? LIMIT 1"; $params=[$run,$nombres,$apellidoP,$apellidoM,$nombre,com_upper($_POST['cargo']??null),com_email($_POST['email']??null),com_upper($_POST['telefono']??null),$activo,$id,$colegioId];}
- $pdo->prepare($sql)->execute($params); com_register_log($pdo,$colegioId,$userId,'actualizar',$tipo,$id,'Actualización de registro de comunidad educativa.'); com_redirect(com_back_index($tipo,'ok','Registro actualizado correctamente.'));
-}catch(Throwable $e){ com_redirect(APP_URL.'/modules/comunidad/editar.php?tipo='.urlencode($tipo).'&id='.$id.'&error='.urlencode($e->getMessage())); }
+
+require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/DB.php';
+require_once __DIR__ . '/../../core/CSRF.php';
+require_once __DIR__ . '/_comunidad_anual_view_helpers.php';
+
+Auth::requireLogin();
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    exit('Método no permitido');
+}
+
+CSRF::requireValid();
+
+$pdo = DB::conn();
+$user = Auth::user();
+$colegioId = (int) Auth::colegioId();
+$tipo = (string)($_POST['tipo'] ?? 'alumnos');
+$permitidos = ['alumnos', 'apoderados', 'docentes', 'asistentes'];
+if (!in_array($tipo, $permitidos, true)) {
+    $tipo = 'alumnos';
+}
+$id = (int)($_POST['id'] ?? 0);
+$anioEscolar = (int)($_POST['anio_escolar'] ?? metis_anio_escolar_actual());
+$tabla = metis_tabla_anual_por_tipo($tipo);
+
+$base = [
+    'run' => strtoupper(trim((string)($_POST['run'] ?? ''))),
+    'nombres' => mb_strtoupper(trim((string)($_POST['nombres'] ?? '')), 'UTF-8'),
+    'apellido_paterno' => mb_strtoupper(trim((string)($_POST['apellido_paterno'] ?? '')), 'UTF-8'),
+    'apellido_materno' => mb_strtoupper(trim((string)($_POST['apellido_materno'] ?? '')), 'UTF-8'),
+    'fecha_nacimiento' => trim((string)($_POST['fecha_nacimiento'] ?? '')) ?: null,
+    'sexo' => trim((string)($_POST['sexo'] ?? '')),
+    'genero' => trim((string)($_POST['genero'] ?? '')),
+    'nombre_social' => trim((string)($_POST['nombre_social'] ?? '')),
+    'vigente' => (int)($_POST['vigente'] ?? 1),
+];
+
+if ($base['run'] === '' || $base['nombres'] === '' || $base['apellido_paterno'] === '') {
+    header('Location: editar.php?tipo=' . urlencode($tipo) . '&id=' . $id . '&anio_escolar=' . $anioEscolar . '&error=obligatorios');
+    exit;
+}
+
+try {
+    $pdo->beginTransaction();
+
+    if ($tipo === 'alumnos') {
+        $stmt = $pdo->prepare("UPDATE {$tabla} SET run=?, nombres=?, apellido_paterno=?, apellido_materno=?, fecha_nacimiento=?, sexo=?, genero=?, nombre_social=?, curso=?, nivel=?, letra=?, jornada=?, estado_matricula=?, vigente=?, updated_at=NOW() WHERE id=? AND colegio_id=? AND anio_escolar=?");
+        $stmt->execute([$base['run'], $base['nombres'], $base['apellido_paterno'], $base['apellido_materno'], $base['fecha_nacimiento'], $base['sexo'], $base['genero'], $base['nombre_social'], mb_strtoupper(trim((string)($_POST['curso'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['nivel'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['letra'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['jornada'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['estado_matricula'] ?? '')), 'UTF-8'), $base['vigente'], $id, $colegioId, $anioEscolar]);
+    } elseif ($tipo === 'apoderados') {
+        $stmt = $pdo->prepare("UPDATE {$tabla} SET run=?, nombres=?, apellido_paterno=?, apellido_materno=?, fecha_nacimiento=?, sexo=?, genero=?, nombre_social=?, telefono=?, email=?, direccion=?, relacion_general=?, vigente=?, updated_at=NOW() WHERE id=? AND colegio_id=? AND anio_escolar=?");
+        $stmt->execute([$base['run'], $base['nombres'], $base['apellido_paterno'], $base['apellido_materno'], $base['fecha_nacimiento'], $base['sexo'], $base['genero'], $base['nombre_social'], trim((string)($_POST['telefono'] ?? '')), mb_strtolower(trim((string)($_POST['email'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['direccion'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['relacion_general'] ?? '')), 'UTF-8'), $base['vigente'], $id, $colegioId, $anioEscolar]);
+    } elseif ($tipo === 'docentes') {
+        $stmt = $pdo->prepare("UPDATE {$tabla} SET run=?, nombres=?, apellido_paterno=?, apellido_materno=?, fecha_nacimiento=?, sexo=?, genero=?, nombre_social=?, cargo=?, departamento=?, tipo_contrato=?, vigente=?, updated_at=NOW() WHERE id=? AND colegio_id=? AND anio_escolar=?");
+        $stmt->execute([$base['run'], $base['nombres'], $base['apellido_paterno'], $base['apellido_materno'], $base['fecha_nacimiento'], $base['sexo'], $base['genero'], $base['nombre_social'], mb_strtoupper(trim((string)($_POST['cargo'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['unidad_departamento'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['tipo_contrato'] ?? '')), 'UTF-8'), $base['vigente'], $id, $colegioId, $anioEscolar]);
+    } else {
+        $stmt = $pdo->prepare("UPDATE {$tabla} SET run=?, nombres=?, apellido_paterno=?, apellido_materno=?, fecha_nacimiento=?, sexo=?, genero=?, nombre_social=?, cargo=?, unidad=?, tipo_contrato=?, vigente=?, updated_at=NOW() WHERE id=? AND colegio_id=? AND anio_escolar=?");
+        $stmt->execute([$base['run'], $base['nombres'], $base['apellido_paterno'], $base['apellido_materno'], $base['fecha_nacimiento'], $base['sexo'], $base['genero'], $base['nombre_social'], mb_strtoupper(trim((string)($_POST['cargo'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['unidad_departamento'] ?? '')), 'UTF-8'), mb_strtoupper(trim((string)($_POST['tipo_contrato'] ?? '')), 'UTF-8'), $base['vigente'], $id, $colegioId, $anioEscolar]);
+    }
+
+    if (function_exists('registrar_bitacora')) {
+        registrar_bitacora($pdo, $colegioId, (int)($user['id'] ?? 0), 'comunidad', 'actualizar_registro_anual', $tabla, $id, 'Actualización de registro anual de comunidad educativa');
+    }
+
+    $pdo->commit();
+    header('Location: index.php?tipo=' . urlencode($tipo) . '&anio_escolar=' . $anioEscolar . '&ok=1');
+    exit;
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('[Metis] Error actualizar comunidad anual: ' . $e->getMessage());
+    header('Location: editar.php?tipo=' . urlencode($tipo) . '&id=' . $id . '&anio_escolar=' . $anioEscolar . '&error=bd');
+    exit;
+}

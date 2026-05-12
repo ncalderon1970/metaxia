@@ -6,6 +6,8 @@ require_once dirname(__DIR__, 2) . '/core/DB.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/helpers.php';
 
+require_once __DIR__ . '/includes/snapshot_report_helpers.php';
+
 Auth::requireLogin();
 
 $pdo = DB::conn();
@@ -26,30 +28,31 @@ if (!$puedeVerReporte) {
     exit('Acceso no autorizado.');
 }
 
-function ras_quote(string $name): string
-{
-    return '`' . str_replace('`', '``', $name) . '`';
-}
-
 function ras_table_exists(PDO $pdo, string $table): bool
 {
-    $allowed = [
-        'casos',
-        'caso_aula_segura',
-        'caso_aula_segura_historial',
-        'aula_segura_causales',
-    ];
-
-    if (!in_array($table, $allowed, true)) {
-        return false;
-    }
-
     try {
-        $pdo->query('SELECT 1 FROM ' . ras_quote($table) . ' LIMIT 1');
-        return true;
+        $stmt = $pdo->prepare("\n            SELECT COUNT(*)\n            FROM INFORMATION_SCHEMA.TABLES\n            WHERE TABLE_SCHEMA = DATABASE()\n              AND TABLE_NAME = ?\n        ");
+        $stmt->execute([$table]);
+        return (int)$stmt->fetchColumn() > 0;
     } catch (Throwable $e) {
         return false;
     }
+}
+
+function ras_column_exists(PDO $pdo, string $table, string $column): bool
+{
+    try {
+        $stmt = $pdo->prepare("\n            SELECT COUNT(*)\n            FROM INFORMATION_SCHEMA.COLUMNS\n            WHERE TABLE_SCHEMA = DATABASE()\n              AND TABLE_NAME = ?\n              AND COLUMN_NAME = ?\n        ");
+        $stmt->execute([$table, $column]);
+        return (int)$stmt->fetchColumn() > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function ras_quote(string $name): string
+{
+    return '`' . str_replace('`', '``', $name) . '`';
 }
 
 function ras_e(?string $value): string

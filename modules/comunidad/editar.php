@@ -1,26 +1,121 @@
 <?php
 declare(strict_types=1);
-require_once dirname(__DIR__, 2) . '/config/app.php';
-require_once dirname(__DIR__, 2) . '/core/DB.php';
-require_once dirname(__DIR__, 2) . '/core/Auth.php';
-require_once dirname(__DIR__, 2) . '/core/CSRF.php';
-require_once dirname(__DIR__, 2) . '/core/helpers.php';
-require_once dirname(__DIR__, 2) . '/core/context_actions.php';
-require_once __DIR__ . '/_comunidad_helpers.php';
-Auth::requireLogin(); com_require_operate();
-$pdo=DB::conn(); $user=Auth::user()??[]; $colegioId=(int)($user['colegio_id']??0);
-$tipo=com_safe_tipo((string)($_GET['tipo']??'alumnos')); $id=(int)($_GET['id']??0); $meta=com_tipo_meta($tipo);
-$row=com_fetch_person($pdo,$tipo,$id,$colegioId); if(!$row){http_response_code(404);exit('Registro no encontrado.');}
-$pageTitle='Editar registro · Comunidad'; $pageSubtitle='Actualizar '. $meta['singular'] .' de comunidad educativa';
-$pageHeaderActions=metis_context_actions([metis_context_action('Volver',APP_URL.'/modules/comunidad/index.php?tipo='.urlencode($tipo),'bi-arrow-left','secondary')]);
-$error=(string)($_GET['error']??''); require_once dirname(__DIR__,2).'/core/layout_header.php';
+
+require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/DB.php';
+require_once __DIR__ . '/../../core/CSRF.php';
+require_once __DIR__ . '/../../core/context_actions.php';
+require_once __DIR__ . '/_comunidad_anual_view_helpers.php';
+
+Auth::requireLogin();
+
+$pdo = DB::conn();
+$colegioId = (int) Auth::colegioId();
+$tipo = (string)($_GET['tipo'] ?? 'alumnos');
+$permitidos = ['alumnos', 'apoderados', 'docentes', 'asistentes'];
+if (!in_array($tipo, $permitidos, true)) {
+    $tipo = 'alumnos';
+}
+$id = (int)($_GET['id'] ?? 0);
+$anioEscolar = metis_anio_escolar_request();
+$tabla = metis_tabla_anual_por_tipo($tipo);
+
+$stmt = $pdo->prepare("SELECT * FROM {$tabla} WHERE id = ? AND colegio_id = ? LIMIT 1");
+$stmt->execute([$id, $colegioId]);
+$registro = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$registro) {
+    http_response_code(404);
+    exit('Registro no encontrado');
+}
+
+$contextActions = [
+    metis_context_action('Volver', 'index.php?tipo=' . urlencode($tipo) . '&anio_escolar=' . (int)$registro['anio_escolar'], 'bi-arrow-left', 'secondary'),
+];
+
+include __DIR__ . '/../../core/layout_header.php';
 ?>
-<style>.com-form-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:1.3rem;box-shadow:0 12px 28px rgba(15,23,42,.06)}.com-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.com-field label{display:block;font-size:.76rem;font-weight:900;color:#334155;margin-bottom:.35rem}.com-field input,.com-field select,.com-field textarea{width:100%;border:1px solid #cbd5e1;border-radius:13px;padding:.68rem .8rem;font-size:.9rem}.com-actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1.2rem}.com-btn{border:1px solid #cbd5e1;border-radius:7px;padding:.65rem 1rem;font-weight:900;text-decoration:none;background:#fff;color:#334155}.com-btn.primary{background:#1e3a8a;color:#fff;border-color:#1e3a8a}.com-alert{border-radius:14px;padding:.85rem 1rem;margin-bottom:1rem;font-weight:800;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}@media(max-width:900px){.com-grid{grid-template-columns:1fr}}</style>
-<?php if($error): ?><div class="com-alert"><?= com_e($error) ?></div><?php endif; ?>
-<section class="com-form-card"><h2 style="margin-top:0;color:#0f172a;">Editar <?= com_e($meta['singular']) ?></h2><form method="post" action="<?= APP_URL ?>/modules/comunidad/actualizar.php"><?= CSRF::field() ?><input type="hidden" name="tipo" value="<?= com_e($tipo) ?>"><input type="hidden" name="id" value="<?= $id ?>"><div class="com-grid">
-<div class="com-field"><label>RUN *</label><input name="run" value="<?= com_e((string)$row['run']) ?>" required></div><div class="com-field"><label>Nombres *</label><input name="nombres" value="<?= com_e((string)($row['nombres']??$row['nombre']??'')) ?>" required></div><div class="com-field"><label>Apellido paterno <?= $tipo==='alumnos'?'*':'' ?></label><input name="apellido_paterno" value="<?= com_e((string)($row['apellido_paterno']??'')) ?>" <?= $tipo==='alumnos'?'required':'' ?>></div><div class="com-field"><label>Apellido materno</label><input name="apellido_materno" value="<?= com_e((string)($row['apellido_materno']??'')) ?>"></div>
-<?php if($tipo==='alumnos'): ?><div class="com-field"><label>Curso</label><input name="curso" value="<?= com_e((string)($row['curso']??'')) ?>"></div><div class="com-field"><label>Género</label><input name="genero" value="<?= com_e((string)($row['genero']??'')) ?>"></div><div class="com-field"><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="<?= com_e((string)($row['fecha_nacimiento']??'')) ?>"></div><?php endif; ?>
-<?php if(in_array($tipo,['docentes','asistentes'],true)): ?><div class="com-field"><label>Cargo</label><input name="cargo" value="<?= com_e((string)($row['cargo']??'')) ?>"></div><?php endif; ?>
-<div class="com-field"><label>Teléfono</label><input name="telefono" value="<?= com_e((string)($row['telefono']??'')) ?>"></div><div class="com-field"><label>Email</label><input type="email" name="email" value="<?= com_e((string)($row['email']??'')) ?>"></div><div class="com-field"><label>Estado</label><select name="activo"><option value="1" <?= (int)($row['activo']??1)===1?'selected':'' ?>>Activo</option><option value="0" <?= (int)($row['activo']??1)===0?'selected':'' ?>>Inactivo</option></select></div><div class="com-field" style="grid-column:1/-1"><label>Dirección</label><input name="direccion" value="<?= com_e((string)($row['direccion']??'')) ?>"></div><div class="com-field" style="grid-column:1/-1"><label>Observación</label><textarea name="observacion" rows="3"><?= com_e((string)($row['observacion']??'')) ?></textarea></div>
-</div><div class="com-actions"><a class="com-btn" href="<?= APP_URL ?>/modules/comunidad/index.php?tipo=<?= urlencode($tipo) ?>">Cancelar</a><button class="com-btn primary" type="submit">Guardar cambios</button></div></form></section>
-<?php require_once dirname(__DIR__,2).'/core/layout_footer.php'; ?>
+
+<section class="metis-page">
+    <div class="metis-card">
+        <div class="metis-card__header">
+            <div>
+                <h1 class="metis-title">Editar registro anual</h1>
+                <p class="metis-subtitle">Actualización acotada al año escolar <?= (int)$registro['anio_escolar'] ?>.</p>
+            </div>
+        </div>
+
+        <form method="post" action="actualizar.php" class="metis-form">
+            <?= CSRF::field() ?>
+            <input type="hidden" name="tipo" value="<?= metis_e($tipo) ?>">
+            <input type="hidden" name="id" value="<?= (int)$registro['id'] ?>">
+            <input type="hidden" name="anio_escolar" value="<?= (int)$registro['anio_escolar'] ?>">
+
+            <div class="metis-grid metis-grid--2">
+                <div class="metis-form-group">
+                    <label>RUN</label>
+                    <input class="metis-input" name="run" value="<?= metis_e($registro['run'] ?? '') ?>" required>
+                </div>
+                <div class="metis-form-group">
+                    <label>Fecha de nacimiento</label>
+                    <input class="metis-input" type="date" name="fecha_nacimiento" value="<?= metis_e($registro['fecha_nacimiento'] ?? '') ?>">
+                </div>
+                <div class="metis-form-group">
+                    <label>Nombres</label>
+                    <input class="metis-input" name="nombres" value="<?= metis_e($registro['nombres'] ?? '') ?>" required>
+                </div>
+                <div class="metis-form-group">
+                    <label>Apellido paterno</label>
+                    <input class="metis-input" name="apellido_paterno" value="<?= metis_e($registro['apellido_paterno'] ?? '') ?>" required>
+                </div>
+                <div class="metis-form-group">
+                    <label>Apellido materno</label>
+                    <input class="metis-input" name="apellido_materno" value="<?= metis_e($registro['apellido_materno'] ?? '') ?>">
+                </div>
+                <div class="metis-form-group">
+                    <label>Nombre social</label>
+                    <input class="metis-input" name="nombre_social" value="<?= metis_e($registro['nombre_social'] ?? '') ?>">
+                </div>
+                <div class="metis-form-group">
+                    <label>Sexo</label>
+                    <input class="metis-input" name="sexo" value="<?= metis_e($registro['sexo'] ?? '') ?>">
+                </div>
+                <div class="metis-form-group">
+                    <label>Género</label>
+                    <input class="metis-input" name="genero" value="<?= metis_e($registro['genero'] ?? '') ?>">
+                </div>
+
+                <?php if ($tipo === 'alumnos'): ?>
+                    <div class="metis-form-group"><label>Curso</label><input class="metis-input" name="curso" value="<?= metis_e($registro['curso'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Nivel</label><input class="metis-input" name="nivel" value="<?= metis_e($registro['nivel'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Letra</label><input class="metis-input" name="letra" value="<?= metis_e($registro['letra'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Jornada</label><input class="metis-input" name="jornada" value="<?= metis_e($registro['jornada'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Estado matrícula</label><input class="metis-input" name="estado_matricula" value="<?= metis_e($registro['estado_matricula'] ?? '') ?>"></div>
+                <?php elseif ($tipo === 'apoderados'): ?>
+                    <div class="metis-form-group"><label>Teléfono</label><input class="metis-input" name="telefono" value="<?= metis_e($registro['telefono'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Email</label><input class="metis-input" type="email" name="email" value="<?= metis_e($registro['email'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Dirección</label><input class="metis-input" name="direccion" value="<?= metis_e($registro['direccion'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Relación general</label><input class="metis-input" name="relacion_general" value="<?= metis_e($registro['relacion_general'] ?? '') ?>"></div>
+                <?php else: ?>
+                    <div class="metis-form-group"><label>Cargo</label><input class="metis-input" name="cargo" value="<?= metis_e($registro['cargo'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Unidad / Departamento</label><input class="metis-input" name="unidad_departamento" value="<?= metis_e($registro['unidad'] ?? $registro['departamento'] ?? '') ?>"></div>
+                    <div class="metis-form-group"><label>Tipo contrato</label><input class="metis-input" name="tipo_contrato" value="<?= metis_e($registro['tipo_contrato'] ?? '') ?>"></div>
+                <?php endif; ?>
+
+                <div class="metis-form-group">
+                    <label>Vigente</label>
+                    <select class="metis-select" name="vigente">
+                        <option value="1" <?= ((int)$registro['vigente'] === 1) ? 'selected' : '' ?>>Sí</option>
+                        <option value="0" <?= ((int)$registro['vigente'] === 0) ? 'selected' : '' ?>>No</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="metis-actions">
+                <button class="metis-btn metis-btn--primary" type="submit">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<?php include __DIR__ . '/../../core/layout_footer.php'; ?>

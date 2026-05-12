@@ -1,40 +1,119 @@
 <?php
 declare(strict_types=1);
-require_once dirname(__DIR__, 2) . '/config/app.php';
-require_once dirname(__DIR__, 2) . '/core/DB.php';
-require_once dirname(__DIR__, 2) . '/core/Auth.php';
-require_once dirname(__DIR__, 2) . '/core/CSRF.php';
-require_once dirname(__DIR__, 2) . '/core/helpers.php';
-require_once dirname(__DIR__, 2) . '/core/context_actions.php';
-require_once __DIR__ . '/_comunidad_helpers.php';
-Auth::requireLogin(); com_require_operate();
-$pdo=DB::conn(); $user=Auth::user()??[]; $colegioId=(int)($user['colegio_id']??0); $userId=(int)($user['id']??0);
-$error=''; $ok='';
-if($_SERVER['REQUEST_METHOD']==='POST'){
- try{
-  CSRF::requireValid($_POST['_token']??null);
-  $alumnoId=(int)($_POST['alumno_id']??0); $apoderadoId=(int)($_POST['apoderado_id']??0);
-  $a=$pdo->prepare('SELECT id FROM alumnos WHERE id=? AND colegio_id=? LIMIT 1'); $a->execute([$alumnoId,$colegioId]); if(!$a->fetchColumn()) throw new RuntimeException('Alumno no válido.');
-  $p=$pdo->prepare('SELECT id FROM apoderados WHERE id=? AND colegio_id=? LIMIT 1'); $p->execute([$apoderadoId,$colegioId]); if(!$p->fetchColumn()) throw new RuntimeException('Apoderado no válido.');
-  $esTitular=(int)($_POST['es_titular']??0)===1?1:0; $puedeRetirar=(int)($_POST['puede_retirar']??0)===1?1:0; $recibe=(int)($_POST['recibe_notificaciones']??1)===1?1:0; $vive=(int)($_POST['vive_con_estudiante']??0)===1?1:0;
-  $parentesco=com_upper($_POST['parentesco']??'') ?: 'APODERADO'; $obs=com_upper($_POST['observacion']??null);
-  if($esTitular===1){$pdo->prepare('UPDATE alumno_apoderado SET es_titular=0 WHERE alumno_id=?')->execute([$alumnoId]);}
-  $stmt=$pdo->prepare("INSERT INTO alumno_apoderado (alumno_id,apoderado_id,tipo_relacion,parentesco,es_titular,puede_retirar,recibe_notificaciones,vive_con_estudiante,observacion,activo,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,1,NOW(),NOW()) ON DUPLICATE KEY UPDATE tipo_relacion=VALUES(tipo_relacion), parentesco=VALUES(parentesco), es_titular=VALUES(es_titular), puede_retirar=VALUES(puede_retirar), recibe_notificaciones=VALUES(recibe_notificaciones), vive_con_estudiante=VALUES(vive_con_estudiante), observacion=VALUES(observacion), activo=1, updated_at=NOW()");
-  $stmt->execute([$alumnoId,$apoderadoId,$parentesco,$parentesco,$esTitular,$puedeRetirar,$recibe,$vive,$obs]);
-  com_register_log($pdo,$colegioId,$userId,'vincular','alumno_apoderado',$alumnoId,'Vinculación alumno-apoderado actualizada.'); $ok='Vinculación guardada correctamente.';
- }catch(Throwable $e){$error=$e->getMessage();}
+
+require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/../../core/Auth.php';
+require_once __DIR__ . '/../../core/DB.php';
+require_once __DIR__ . '/../../core/CSRF.php';
+require_once __DIR__ . '/../../core/context_actions.php';
+require_once __DIR__ . '/_comunidad_anual_view_helpers.php';
+
+Auth::requireLogin();
+
+$pdo = DB::conn();
+$user = Auth::user();
+$colegioId = (int) Auth::colegioId();
+$anioEscolar = metis_anio_escolar_request();
+$mensaje = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    CSRF::requireValid();
+
+    $alumnoId = (int)($_POST['alumno_anual_id'] ?? 0);
+    $apoderadoId = (int)($_POST['apoderado_anual_id'] ?? 0);
+    $relacion = mb_strtoupper(trim((string)($_POST['relacion'] ?? '')), 'UTF-8');
+    $principal = isset($_POST['es_principal']) ? 1 : 0;
+    $emergencia = isset($_POST['contacto_emergencia']) ? 1 : 0;
+    $retiro = isset($_POST['retiro_autorizado']) ? 1 : 0;
+    $vive = isset($_POST['vive_con_estudiante']) ? 1 : 0;
+    $notifica = isset($_POST['autoriza_notificaciones']) ? 1 : 0;
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare('SELECT id FROM alumnos_anual WHERE id=? AND colegio_id=? AND anio_escolar=? LIMIT 1');
+        $stmt->execute([$alumnoId, $colegioId, $anioEscolar]);
+        $alumnoOk = $stmt->fetchColumn();
+
+        $stmt = $pdo->prepare('SELECT id FROM apoderados_anual WHERE id=? AND colegio_id=? AND anio_escolar=? LIMIT 1');
+        $stmt->execute([$apoderadoId, $colegioId, $anioEscolar]);
+        $apoderadoOk = $stmt->fetchColumn();
+
+        if (!$alumnoOk || !$apoderadoOk) {
+            throw new RuntimeException('Alumno o apoderado fuera del año escolar activo.');
+        }
+
+        if ($principal === 1) {
+            $stmt = $pdo->prepare('UPDATE alumno_apoderado_anual SET es_principal=0 WHERE alumno_anual_id=? AND anio_escolar=?');
+            $stmt->execute([$alumnoId, $anioEscolar]);
+        }
+
+        $stmt = $pdo->prepare('
+            INSERT INTO alumno_apoderado_anual
+                (alumno_anual_id, apoderado_anual_id, anio_escolar, relacion, es_principal, contacto_emergencia, retiro_autorizado, vive_con_estudiante, autoriza_notificaciones, vigente, created_at, updated_at)
+            VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                relacion=VALUES(relacion),
+                es_principal=VALUES(es_principal),
+                contacto_emergencia=VALUES(contacto_emergencia),
+                retiro_autorizado=VALUES(retiro_autorizado),
+                vive_con_estudiante=VALUES(vive_con_estudiante),
+                autoriza_notificaciones=VALUES(autoriza_notificaciones),
+                vigente=1,
+                updated_at=NOW()
+        ');
+        $stmt->execute([$alumnoId, $apoderadoId, $anioEscolar, $relacion, $principal, $emergencia, $retiro, $vive, $notifica]);
+
+        if (function_exists('registrar_bitacora')) {
+            registrar_bitacora($pdo, $colegioId, (int)($user['id'] ?? 0), 'comunidad', 'vincular_apoderado_anual', 'alumno_apoderado_anual', $alumnoId, 'Vinculación anual alumno-apoderado');
+        }
+
+        $pdo->commit();
+        $mensaje = 'Vinculación guardada correctamente.';
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('[Metis] Error vincular apoderado anual: ' . $e->getMessage());
+        $mensaje = 'No fue posible guardar la vinculación.';
+    }
 }
-$alumnoId=(int)($_GET['alumno_id']??($_POST['alumno_id']??0));
-$q=trim((string)($_GET['q']??''));
-$alumnos=[]; $apoderados=[]; $vinculos=[]; $params=[$colegioId]; $where='colegio_id=? AND activo=1';
-if($q!==''){ $like='%'.mb_strtoupper($q,'UTF-8').'%'; $runLike='%'.str_replace(['.','-',' '],'',mb_strtoupper($q,'UTF-8')).'%'; $where.=" AND (UPPER(CONCAT_WS(' ',nombres,apellido_paterno,apellido_materno)) COLLATE utf8mb4_unicode_ci LIKE ? COLLATE utf8mb4_unicode_ci OR UPPER(REPLACE(REPLACE(REPLACE(run,'.',''),'-',''),' ','')) LIKE ?)"; array_push($params,$like,$runLike); }
-$s=$pdo->prepare("SELECT id, run, CONCAT_WS(' ',nombres,apellido_paterno,apellido_materno) AS nombre_display, curso FROM alumnos WHERE {$where} ORDER BY apellido_paterno, apellido_materno, nombres LIMIT 80"); $s->execute($params); $alumnos=$s->fetchAll(PDO::FETCH_ASSOC);
-$s=$pdo->prepare("SELECT id, run, COALESCE(NULLIF(CONCAT_WS(' ',COALESCE(nombres,''),COALESCE(apellido_paterno,''),COALESCE(apellido_materno,'')),''),nombre) AS nombre_display, telefono, email FROM apoderados WHERE colegio_id=? AND activo=1 ORDER BY apellido_paterno, apellido_materno, nombre LIMIT 400"); $s->execute([$colegioId]); $apoderados=$s->fetchAll(PDO::FETCH_ASSOC);
-if($alumnoId>0){$v=$pdo->prepare("SELECT aa.*, ap.run, COALESCE(NULLIF(CONCAT_WS(' ',COALESCE(ap.nombres,''),COALESCE(ap.apellido_paterno,''),COALESCE(ap.apellido_materno,'')),''),ap.nombre) AS nombre_display, ap.telefono, ap.email FROM alumno_apoderado aa JOIN alumnos al ON al.id=aa.alumno_id AND al.colegio_id=? JOIN apoderados ap ON ap.id=aa.apoderado_id AND ap.colegio_id=al.colegio_id WHERE aa.alumno_id=? ORDER BY aa.es_titular DESC, aa.activo DESC, nombre_display ASC"); $v->execute([$colegioId,$alumnoId]); $vinculos=$v->fetchAll(PDO::FETCH_ASSOC);}
-$pageTitle='Vincular apoderados · Comunidad'; $pageSubtitle='Gestión de relaciones alumno-apoderado'; $pageHeaderActions=metis_context_actions([metis_context_action('Volver',APP_URL.'/modules/comunidad/index.php?tipo=alumnos','bi-arrow-left','secondary'),metis_context_action('Nuevo apoderado',APP_URL.'/modules/comunidad/crear.php?tipo=apoderados','bi-person-plus','primary')]); require_once dirname(__DIR__,2).'/core/layout_header.php';
+
+$stmt = $pdo->prepare('SELECT id, run, nombres, apellido_paterno, apellido_materno, curso, letra FROM alumnos_anual WHERE colegio_id=? AND anio_escolar=? AND vigente=1 ORDER BY apellido_paterno, apellido_materno, nombres LIMIT 500');
+$stmt->execute([$colegioId, $anioEscolar]);
+$alumnos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$stmt = $pdo->prepare('SELECT id, run, nombres, apellido_paterno, apellido_materno, nombre_social FROM apoderados_anual WHERE colegio_id=? AND anio_escolar=? AND vigente=1 ORDER BY apellido_paterno, apellido_materno, nombres LIMIT 500');
+$stmt->execute([$colegioId, $anioEscolar]);
+$apoderados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$contextActions = [
+    metis_context_action('Volver a comunidad', 'index.php?tipo=alumnos&anio_escolar=' . $anioEscolar, 'bi-arrow-left', 'secondary'),
+];
+include __DIR__ . '/../../core/layout_header.php';
 ?>
-<style>.com-panel{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:1.2rem;margin-bottom:1rem;box-shadow:0 12px 28px rgba(15,23,42,.06)}.com-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.com-field label{display:block;font-size:.76rem;font-weight:900;color:#334155;margin-bottom:.35rem}.com-field input,.com-field select,.com-field textarea{width:100%;border:1px solid #cbd5e1;border-radius:13px;padding:.68rem .8rem}.com-btn{border:1px solid #cbd5e1;border-radius:7px;padding:.65rem 1rem;font-weight:900;text-decoration:none;background:#1e3a8a;color:#fff}.com-alert{border-radius:14px;padding:.85rem 1rem;margin-bottom:1rem;font-weight:800}.com-alert.ok{background:#ecfdf5;color:#047857;border:1px solid #bbf7d0}.com-alert.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}.com-table{width:100%;border-collapse:collapse}.com-table th,.com-table td{padding:.7rem;border-bottom:1px solid #e2e8f0;text-align:left}.com-muted{color:#64748b;font-size:.82rem}@media(max-width:900px){.com-grid{grid-template-columns:1fr}}</style>
-<?php if($ok): ?><div class="com-alert ok"><?= com_e($ok) ?></div><?php endif; ?><?php if($error): ?><div class="com-alert err"><?= com_e($error) ?></div><?php endif; ?>
-<section class="com-panel"><h2 style="margin-top:0">Seleccionar alumno</h2><form method="get" class="com-grid"><div class="com-field"><label>Buscar alumno por RUN o nombre</label><input name="q" value="<?= com_e($q) ?>"></div><div style="align-self:end"><button class="com-btn" type="submit">Buscar</button></div></form><div style="margin-top:1rem" class="com-field"><label>Alumno</label><select onchange="location.href='?alumno_id='+this.value"><option value="0">Seleccione...</option><?php foreach($alumnos as $a): ?><option value="<?= (int)$a['id'] ?>" <?= $alumnoId===(int)$a['id']?'selected':'' ?>><?= com_e($a['nombre_display'].' · '.$a['run'].' · '.($a['curso']??'')) ?></option><?php endforeach; ?></select></div></section>
-<?php if($alumnoId>0): ?><section class="com-panel"><h2 style="margin-top:0">Vincular apoderado</h2><form method="post"><?= CSRF::field() ?><input type="hidden" name="alumno_id" value="<?= $alumnoId ?>"><div class="com-grid"><div class="com-field"><label>Apoderado</label><select name="apoderado_id" required><option value="">Seleccione...</option><?php foreach($apoderados as $ap): ?><option value="<?= (int)$ap['id'] ?>"><?= com_e($ap['nombre_display'].' · '.$ap['run']) ?></option><?php endforeach; ?></select></div><div class="com-field"><label>Parentesco / relación</label><input name="parentesco" placeholder="MADRE, PADRE, TUTOR..."></div><div class="com-field"><label><input type="checkbox" name="es_titular" value="1"> Apoderado principal</label></div><div class="com-field"><label><input type="checkbox" name="puede_retirar" value="1"> Retiro autorizado</label></div><div class="com-field"><label><input type="checkbox" name="recibe_notificaciones" value="1" checked> Recibe notificaciones</label></div><div class="com-field"><label><input type="checkbox" name="vive_con_estudiante" value="1"> Vive con estudiante</label></div><div class="com-field" style="grid-column:1/-1"><label>Observación</label><textarea name="observacion" rows="2"></textarea></div></div><button class="com-btn" type="submit">Guardar vinculación</button></form></section><section class="com-panel"><h2 style="margin-top:0">Apoderados vinculados</h2><table class="com-table"><thead><tr><th>Apoderado</th><th>Relación</th><th>Marcas</th><th>Contacto</th></tr></thead><tbody><?php if(!$vinculos): ?><tr><td colspan="4" class="com-muted">Sin apoderados vinculados.</td></tr><?php endif; ?><?php foreach($vinculos as $v): ?><tr><td><strong><?= com_e($v['nombre_display']) ?></strong><div class="com-muted"><?= com_e($v['run']) ?></div></td><td><?= com_e((string)($v['parentesco']??'-')) ?></td><td><?= ((int)$v['es_titular']===1?'Principal ':'') ?><?= ((int)$v['puede_retirar']===1?'Retiro ':'') ?><?= ((int)$v['recibe_notificaciones']===1?'Notifica ':'') ?><?= ((int)$v['vive_con_estudiante']===1?'Vive con estudiante':'') ?></td><td><?= com_e((string)($v['telefono']??'-')) ?><div class="com-muted"><?= com_e((string)($v['email']??'')) ?></div></td></tr><?php endforeach; ?></tbody></table></section><?php endif; ?>
-<?php require_once dirname(__DIR__,2).'/core/layout_footer.php'; ?>
+<section class="metis-page">
+    <div class="metis-card">
+        <div class="metis-card__header"><div><h1 class="metis-title">Vincular apoderado anual</h1><p class="metis-subtitle">Relación alumno-apoderado para el año escolar <?= (int)$anioEscolar ?>.</p></div></div>
+        <?php if ($mensaje !== ''): ?><div class="metis-alert metis-alert--info"><?= metis_e($mensaje) ?></div><?php endif; ?>
+        <form method="post" class="metis-form">
+            <?= CSRF::field() ?>
+            <input type="hidden" name="anio_escolar" value="<?= (int)$anioEscolar ?>">
+            <div class="metis-grid metis-grid--2">
+                <div class="metis-form-group"><label>Alumno</label><select class="metis-select" name="alumno_anual_id" required><?php foreach ($alumnos as $a): ?><option value="<?= (int)$a['id'] ?>"><?= metis_e($a['run'] . ' · ' . trim($a['nombres'].' '.$a['apellido_paterno'].' '.$a['apellido_materno']) . ' · ' . trim(($a['curso'] ?? '').' '.($a['letra'] ?? ''))) ?></option><?php endforeach; ?></select></div>
+                <div class="metis-form-group"><label>Apoderado</label><select class="metis-select" name="apoderado_anual_id" required><?php foreach ($apoderados as $ap): ?><option value="<?= (int)$ap['id'] ?>"><?= metis_e($ap['run'] . ' · ' . metis_nombre_preferente($ap)) ?></option><?php endforeach; ?></select></div>
+                <div class="metis-form-group"><label>Relación</label><input class="metis-input" name="relacion" placeholder="MADRE, PADRE, TUTOR, ABUELA..."></div>
+            </div>
+            <div class="metis-checks">
+                <label><input type="checkbox" name="es_principal"> Principal</label>
+                <label><input type="checkbox" name="contacto_emergencia"> Emergencia</label>
+                <label><input type="checkbox" name="retiro_autorizado"> Retiro autorizado</label>
+                <label><input type="checkbox" name="vive_con_estudiante"> Vive con estudiante</label>
+                <label><input type="checkbox" name="autoriza_notificaciones"> Autoriza notificaciones</label>
+            </div>
+            <div class="metis-actions"><button class="metis-btn metis-btn--primary" type="submit">Guardar vinculación</button></div>
+        </form>
+    </div>
+</section>
+<?php include __DIR__ . '/../../core/layout_footer.php'; ?>
